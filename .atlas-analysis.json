@@ -1,0 +1,77 @@
+{
+  "projectType": "frontend",
+  "projectName": "ViewTool",
+  "projectDescription": "Desktop application for downloading and managing multimedia content using yt-dlp with network synchronization capabilities",
+  "theme": "palm",
+  "primaryColor": "#418f45",
+  "lightColor": "#eff8ef",
+  "darkColor": "#9ac0a4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Core Features",
+            "pages": ["features/downloading", "features/media-library", "features/network-sync", "features/preferences"]
+          },
+          {
+            "group": "User Interface",
+            "pages": ["ui/main-window", "ui/management-panel", "ui/login", "ui/preferences-panel"]
+          },
+          {
+            "group": "Configuration",
+            "pages": ["configuration/setup", "configuration/yt-dlp", "configuration/ffmpeg"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Services",
+            "pages": ["api/yt-dlp-service", "api/media-library", "api/download-controller", "api/media-service"]
+          },
+          {
+            "group": "UI Components",
+            "pages": ["api/view-tool-app", "api/panel-main", "api/panel-management"]
+          },
+          {
+            "group": "Utilities",
+            "pages": ["api/validation-service", "api/preferences-service", "api/ui-utils"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Download videos and audio from YouTube using yt-dlp",
+    "Media library management with filtering and search",
+    "Network synchronization with DI Media Network",
+    "User authentication and session management",
+    "Configurable preferences and download settings",
+    "Local and cloud media file management"
+  ],
+  "publicApiSurface": [
+    "YtDlpService.download()",
+    "MediaLibrary.scan()",
+    "MediaLibrary.delete()",
+    "DownloadController.startDownload()",
+    "DownloadController.validateUrl()",
+    "MediaService.getMediaById()",
+    "MediaService.uploadMedia()",
+    "MediaService.downloadMedia()",
+    "ValidationService.requireValidUrl()",
+    "ValidationService.requireValidLimit()",
+    "PreferencesService.getYtDlpPath()",
+    "PreferencesService.getOutputDirectory()",
+    "TokenService.getToken()",
+    "TokenService.saveToken()",
+    "PlayService.playLastVideo()",
+    "LibraryService.filterByType()"
+  ]
+}
