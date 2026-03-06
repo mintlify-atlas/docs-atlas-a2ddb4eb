@@ -1,0 +1,151 @@
+---
+title: 'ValidationService'
+description: 'Utility class for validating user inputs including URLs, text fields, and speed limits'
+---
+
+## Overview
+
+The `ValidationService` class provides static validation methods for ensuring data integrity across the ViewTool application. It handles URL validation, text field validation, and speed limit parsing.
+
+**Package:** `martin.viewtool.core`
+
+## Methods
+
+### requireHasText
+
+Validates that a string has non-blank text content.
+
+```java
+public static void requireHasText(String s, String field)
+```
+
+<ParamField path="s" type="String">
+  The string to validate
+</ParamField>
+
+<ParamField path="field" type="String">
+  The field name to include in the error message
+</ParamField>
+
+<ResponseField name="throws" type="IllegalArgumentException">
+  Thrown when the string is null or blank, with message: `{field} Can't be empty`
+</ResponseField>
+
+**Example:**
+
+<CodeGroup>
+```java Valid Input
+ValidationService.requireHasText("example.com", "URL");
+// No exception thrown
+```
+
+```java Invalid Input
+ValidationService.requireHasText("", "URL");
+// Throws: IllegalArgumentException: URL Can't be empty
+```
+</CodeGroup>
+
+### requireValidUrl
+
+Validates and parses a URL string, ensuring it has both a scheme and host.
+
+```java
+public static URI requireValidUrl(String raw)
+```
+
+<ParamField path="raw" type="String">
+  The raw URL string to validate and parse
+</ParamField>
+
+<ResponseField name="returns" type="URI">
+  The parsed URI object if validation succeeds
+</ResponseField>
+
+<ResponseField name="throws" type="IllegalArgumentException">
+  Thrown when the URL is invalid or missing scheme/host, with message: `invalid URL`
+</ResponseField>
+
+**Example:**
+
+<CodeGroup>
+```java Valid URL
+URI url = ValidationService.requireValidUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+// Returns URI object
+```
+
+```java Invalid URL
+ValidationService.requireValidUrl("not-a-valid-url");
+// Throws: IllegalArgumentException: invalid URL
+```
+
+```java Usage in Download Flow
+public int startDownload(String rawUrl, MediaFormat format, Path outputDir) {
+    URI url = ValidationService.requireValidUrl(rawUrl);
+    // Proceed with download using validated URI
+    return service.download(url, format, outputDir);
+}
+```
+</CodeGroup>
+
+### requireValidLimit
+
+Validates and formats a download speed limit input. Converts numeric input to bandwidth format (e.g., "50" → "50M").
+
+```java
+public static String requireValidLimit(String userInput)
+```
+
+<ParamField path="userInput" type="String">
+  The user-provided speed limit (digits only, e.g., "50" for 50MB/s)
+</ParamField>
+
+<ResponseField name="returns" type="String">
+  Formatted speed limit string with "M" suffix (e.g., "50M"), or `null` if input is null, empty, or "0"
+</ResponseField>
+
+<ResponseField name="throws" type="IllegalArgumentException">
+  Thrown when input contains non-digit characters, with message: `invalid speed. Please, write only digits number example: 1 , 20 , 30 .`
+</ResponseField>
+
+**Example:**
+
+<CodeGroup>
+```java Valid Speed Limit
+String limit = ValidationService.requireValidLimit("50");
+// Returns: "50M"
+```
+
+```java No Limit
+String limit = ValidationService.requireValidLimit("0");
+// Returns: null
+
+String limit = ValidationService.requireValidLimit("");
+// Returns: null
+```
+
+```java Invalid Input
+ValidationService.requireValidLimit("50MB");
+// Throws: IllegalArgumentException: invalid speed. Please, write only digits number example: 1 , 20 , 30 .
+```
+
+```java Usage in Download Controller
+public void validateSpeed(String speed) {
+    ValidationService.requireValidLimit(speed);
+}
+
+public int startDownload(String rawUrl, String rawLimit) throws Exception {
+    URI url = ValidationService.requireValidUrl(rawUrl);
+    String limit = ValidationService.requireValidLimit(rawLimit);
+    DownloadRequest req = new DownloadRequest(url, format, onlyAudio, outputDir, limit, m3uFile);
+    return service.download(req, out, onPersent);
+}
+```
+</CodeGroup>
+
+## Implementation Notes
+
+- The class has a private constructor and cannot be instantiated
+- All methods are static utilities
+- URL validation requires both scheme (e.g., `http://`, `https://`) and host components
+- Speed limit validation only accepts digit-only strings and automatically appends "M" for megabytes per second
+- Input strings are trimmed before validation

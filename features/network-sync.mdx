@@ -1,0 +1,359 @@
+---
+title: Network Synchronization
+description: Sync your media library with DI Media Network for cloud storage and cross-device access
+---
+
+## Overview
+
+ViewTool integrates with the DI Media Network to provide cloud-based media storage and synchronization. Upload your downloaded content to share across devices and download media from other users on the network.
+
+## Authentication
+
+Network features require authentication with a valid token:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private final TokenService tokenService;
+private String token;
+
+public PanelManagement(ViewToolApp jframe) {
+    this.jframe = jframe;
+    this.tokenService = jframe.getTokenService();
+    token = tokenService.getToken();
+    // ...
+}
+```
+
+<Note>
+You must be logged in to use network synchronization features. The token is managed by the `TokenService` and persists across sessions.
+</Note>
+
+## Network Polling
+
+ViewTool uses `MediaSyncPolling` to continuously check for new media on the network:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void startPolling() {
+    try {
+        MediaSyncPolling mediaSyncPolling = jframe.getComponent();
+        token = tokenService.getToken();
+        mediaSyncPolling.setToken(token);
+        mediaSyncPolling.setPollingInterval(5);  // Initial: 5 seconds
+
+        if (!listenerAdded) {
+            mediaSyncPolling.addCustomEventListener(new CheckListMediaListener() {
+                @Override
+                public void checkListMediaReceived(CheckListMediaEvent evt) {
+                    List<Media> newMedias = evt.getMediaList();
+
+                    if (initialLoadInProgress && !networkReady) {
+                        networkReady = true;
+                    }
+
+                    if (newMedias != null && !newMedias.isEmpty()) {
+                        applyNetworkUpdateTable(newMedias);
+                    }
+
+                    if (initialLoadInProgress) {
+                        checkSynchronization();
+                    }
+                }
+            });
+            listenerAdded = true;
+        }
+
+        mediaSyncPolling.setRunning(true);
+        mediaSyncPolling.setPollingInterval(60);  // Then: 60 seconds
+
+    } catch (Exception ex) {
+        Alerts.error(this, "Error: " + ex.getMessage());
+    }
+}
+```
+
+<Steps>
+  <Step title="Initial Poll">
+    When the management panel loads, polling starts with a 5-second interval to quickly fetch the initial media list.
+  </Step>
+
+  <Step title="Background Sync">
+    After the initial load, the polling interval increases to 60 seconds to reduce server load while maintaining synchronization.
+  </Step>
+
+  <Step title="Event Processing">
+    When new media is detected, the `CheckListMediaListener` receives an event containing the updated media list.
+  </Step>
+</Steps>
+
+## Network Media Management
+
+The `MediaService` manages network media and prevents duplicates:
+
+```java:src/main/java/martin/viewtool/core/MediaService.java
+private List<Media> networkMediaAll = new ArrayList<>();
+
+public void addNewMediaNetwork(List<Media> newMedia) {
+    for (Media media : newMedia) {
+        if (media == null) {
+            continue;
+        }
+
+        boolean exists = false;
+        for (Media file : networkMediaAll) {
+            if (file != null && file.id == media.id && media.id > 0) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            networkMediaAll.add(media);
+        }
+    }
+}
+```
+
+<Accordion title="Duplicate Prevention">
+  Media items are identified by their unique ID. When new media arrives from the network, the service checks if it already exists in the local cache before adding it.
+</Accordion>
+
+## Uploading Media
+
+Upload your local media files to the DI Media Network:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void buttonUploadFileActionPerformed(java.awt.event.ActionEvent evt) {
+    JFileChooser chooser = new JFileChooser();
+    if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+        File selectedFile = chooser.getSelectedFile();
+
+        String youtubeUrl = null;
+        while (true) {
+            youtubeUrl = JOptionPane.showInputDialog(this, 
+                "Enter the YouTube URL:");
+            if (youtubeUrl == null) {
+                break;
+            }
+            if (!youtubeUrl.trim().isEmpty()) {
+                break;
+            }
+            utils.showFeedback(infoLabel, "URL can't be empty.", true);
+        }
+
+        if (youtubeUrl != null) {
+            try {
+                managementService.uploadMedia(selectedFile, 
+                    youtubeUrl.trim(), jframe.getComponent(), token);
+                Alerts.info(this, "File uploaded:\n" + 
+                    selectedFile.getAbsolutePath());
+            } catch (Exception ex) {
+                utils.showFeedback(infoLabel, ex.getMessage(), true);
+            }
+        }
+    }
+}
+```
+
+### Upload Validation
+
+Only specific media formats are allowed for upload:
+
+```java:src/main/java/martin/viewtool/core/ManagementService.java
+public void uploadMedia(File file, String youtubeUrl, 
+                       MediaSyncPolling msp, String token) throws Exception {
+    String name = file.getName().toLowerCase();
+    if (!name.endsWith(".mp3") && 
+        !name.endsWith(".mp4") && 
+        !name.endsWith(".m4a")) {
+        throw new Exception("Only MP3, MP4 or M4A files are allowed.");
+    }
+    
+    msp.uploadFileMultipart(file, youtubeUrl, token);
+}
+```
+
+<Warning>
+Only MP3, MP4, and M4A files can be uploaded to the network. Other formats are rejected to maintain compatibility.
+</Warning>
+
+## Downloading from Network
+
+Download media files from the DI Media Network to your local library:
+
+```java:src/main/java/martin/viewtool/core/ManagementService.java
+public void downloadMedia(Media media, MediaSyncPolling msp, String token) 
+    throws Exception {
+    Path destPath = mediaService.getDownloadBaseDir()
+                               .resolve(media.mediaFileName);
+    if (Files.exists(destPath)) {
+        throw new Exception("This file is already downloaded.");
+    }
+    msp.download(media.id, destPath.toFile(), token);
+}
+```
+
+### Download Handler in UI
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void buttonDownloadFileActionPerformed(java.awt.event.ActionEvent evt) {
+    Media file = getSelectedMedia("Download");
+    if (file == null) {
+        return;
+    }
+
+    try {
+        managementService.downloadMedia(file, jframe.getComponent(), token);
+        Alerts.info(this, "File successfully downloaded to " + 
+            prefService.getOutputDir().toString());
+        refreshLocalList();
+    } catch (Exception ex) {
+        utils.showFeedback(infoLabel, 
+            "This media is already downloaded.", true);
+    }
+}
+```
+
+<Note>
+Downloads are saved to your configured output directory. Duplicate downloads are prevented automatically.
+</Note>
+
+## Network Table Updates
+
+The media table updates in real-time as network data arrives:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void applyNetworkUpdateTable(final List<Media> newMedia) {
+    Timer timer = new Timer(0, new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            mediaService.addNewMediaNetwork(newMedia);
+            refreshTableData(false);
+        }
+    });
+    timer.setRepeats(false);
+    timer.start();
+}
+
+private void refreshTableData(boolean isInitialLoad) {
+    if (rebuildWorker != null && !rebuildWorker.isDone()) {
+        rebuildWorker.cancel(true);
+    }
+    if (isInitialLoad) {
+        freezeUI();
+    }
+
+    rebuildWorker = new SwingWorker<>() {
+        @Override
+        protected List<Media> doInBackground() {
+            return mediaService.createMediaListCombined();
+        }
+
+        @Override
+        protected void done() {
+            try {
+                if (isCancelled()) {
+                    return;
+                }
+                fullMediaList = get();
+                applyMediaTableModel(fullMediaList);
+
+                if (isInitialLoad) {
+                    localReady = true;
+                    checkSynchronization();
+                }
+            } catch (Exception ex) {
+                Alerts.error(PanelManagement.this, 
+                    "Error rebuilding table: " + ex.getMessage());
+            }
+        }
+    };
+    rebuildWorker.execute();
+}
+```
+
+<Accordion title="Background Processing">
+  Table updates happen asynchronously using SwingWorker to prevent UI freezing. The worker can be cancelled if a new update arrives before the previous one completes.
+</Accordion>
+
+## Synchronization State
+
+ViewTool tracks the synchronization state using volatile flags:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private volatile boolean localReady = false;
+private volatile boolean networkReady = false;
+private volatile boolean initialLoadInProgress = false;
+
+private void checkSynchronization() {
+    if (!initialLoadInProgress) {
+        return;
+    }
+    if (localReady && networkReady) {
+        initialLoadInProgress = false;
+        unfreezeUI();
+    }
+}
+```
+
+The UI remains frozen with a loading indicator until both local and network data are ready:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void freezeUI() {
+    if (isLoadingOverlayVisible) {
+        return;
+    }
+    isLoadingOverlayVisible = true;
+
+    SwingUtilities.invokeLater(() -> {
+        JRootPane rootPane = SwingUtilities.getRootPane(PanelManagement.this);
+        if (rootPane != null) {
+            rootPane.setGlassPane(loadingPanel);
+            loadingPanel.setVisible(true);
+            loadingPanel.requestFocusInWindow();
+        }
+        
+        Window window = SwingUtilities.getWindowAncestor(PanelManagement.this);
+        if (window != null) {
+            window.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        }
+    });
+}
+```
+
+## Media Location Indicators
+
+The network table distinguishes between local and network-only files:
+
+```java:src/main/java/martin/viewtool/core/MediaService.java
+public File getLocalFile(Media media) {
+    Path downloadedPath = getDownloadBaseDir();
+    Path localPath = downloadedPath.resolve(media.mediaFileName);
+    return localPath.toFile();
+}
+```
+
+Files are marked in the UI based on their location:
+- **Local**: Available on your device
+- **Network**: Available for download from the cloud
+- **Both**: Present locally and in the cloud
+
+<Note>
+Use the location column in the media table to quickly identify where each file is stored.
+</Note>
+
+## Download Directory
+
+Network downloads use the default download directory:
+
+```java:src/main/java/martin/viewtool/core/MediaService.java
+public Path getDownloadBaseDir() {
+    Path downloadedPath = Path.of(System.getProperty("user.home"), 
+                                 "ViewToolDownloads");
+    File pathToFile = downloadedPath.toFile();
+    if (!pathToFile.exists()) {
+        pathToFile.mkdirs();
+    }
+    return downloadedPath;
+}
+```
+
+The directory is created automatically if it doesn't exist.

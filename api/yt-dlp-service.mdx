@@ -1,0 +1,168 @@
+---
+title: 'YtDlpService'
+description: 'Service class for downloading media using yt-dlp'
+---
+
+## Overview
+
+The `YtDlpService` class provides a wrapper around the yt-dlp command-line tool for downloading media from various sources. It supports multiple formats, quality options, and download controls.
+
+**Package:** `martin.viewtool.core`
+
+## Constructor
+
+<ParamField path="ytDlpPath" type="Path" required>
+  Path to the yt-dlp executable binary
+</ParamField>
+
+```java
+public YtDlpService(Path ytDlpPath)
+```
+
+### Example
+
+```java
+Path ytDlpPath = Path.of("/usr/local/bin/yt-dlp");
+YtDlpService service = new YtDlpService(ytDlpPath);
+```
+
+## Methods
+
+### download()
+
+Executes a media download based on the provided request parameters.
+
+```java
+public int download(
+    DownloadRequest req,
+    Appendable out,
+    IntConsumer onPercent
+) throws IOException, InterruptedException
+```
+
+<ParamField path="req" type="DownloadRequest" required>
+  Download request object containing URL, format, output directory, and options
+</ParamField>
+
+<ParamField path="out" type="Appendable" required>
+  Output stream for capturing download logs and progress messages
+</ParamField>
+
+<ParamField path="onPercent" type="IntConsumer" required>
+  Callback function invoked with download progress percentage (0-100)
+</ParamField>
+
+<ResponseField name="exitCode" type="int">
+  Process exit code: 0 for success, non-zero for failure
+</ResponseField>
+
+### Behavior
+
+The method constructs yt-dlp command arguments based on the request:
+
+- **MP3 Format**: Extracts audio and converts to MP3 with best quality
+- **MP4 Format**: Downloads best video+audio in MP4 container
+- **Audio Only**: Extracts audio track when `audioOnly` is true
+- **Speed Limiting**: Applies download rate limit if specified
+- **M3U Playlist**: Generates playlist file when `m3uFile` is true
+
+### Code Example
+
+<CodeGroup>
+
+```java Basic Usage
+YtDlpService service = new YtDlpService(Path.of("/usr/bin/yt-dlp"));
+
+DownloadRequest request = new DownloadRequest(
+    URI.create("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+    MediaFormat.MP3,
+    false,
+    Path.of("/home/user/downloads"),
+    null,
+    false
+);
+
+StringBuilder output = new StringBuilder();
+int exitCode = service.download(
+    request,
+    output,
+    percent -> System.out.println("Progress: " + percent + "%")
+);
+
+if (exitCode == 0) {
+    System.out.println("Download completed successfully");
+}
+```
+
+```java With Speed Limit
+DownloadRequest request = new DownloadRequest(
+    URI.create("https://example.com/video"),
+    MediaFormat.MP4,
+    false,
+    Path.of("/downloads"),
+    "5M",  // Limit to 5 MB/s
+    false
+);
+
+StringBuilder log = new StringBuilder();
+service.download(request, log, progress -> {
+    // Update UI progress bar
+    progressBar.setValue(progress);
+});
+```
+
+```java Audio Only MP4
+// Extract audio from MP4 video
+DownloadRequest request = new DownloadRequest(
+    URI.create("https://example.com/video"),
+    MediaFormat.MP4,
+    true,  // Audio only
+    Path.of("/music"),
+    null,
+    false
+);
+
+StringBuilder output = new StringBuilder();
+int result = service.download(request, output, percent -> {});
+```
+
+```java Generate M3U Playlist
+DownloadRequest request = new DownloadRequest(
+    URI.create("https://example.com/playlist"),
+    MediaFormat.MP3,
+    false,
+    Path.of("/playlists"),
+    null,
+    true  // Create playlist.m3u file
+);
+
+StringBuilder output = new StringBuilder();
+service.download(request, output, System.out::println);
+```
+
+</CodeGroup>
+
+## Command Arguments
+
+The service generates the following yt-dlp command structure:
+
+| Argument | Purpose | Condition |
+|----------|---------|----------|
+| `-o "%(title)s.%(ext)s"` | Output filename template | Always |
+| `-x --audio-format mp3 --audio-quality 0` | Extract MP3 audio | `format == MP3` |
+| `-f bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4` | Best MP4 video | `format == MP4` |
+| `-x --audio-format m4a` | Extract M4A audio | `audioOnly && format == MP4` |
+| `--newline --progress-template "%(progress._percent_str)s"` | Progress tracking | Always |
+| `--limit-rate <value>` | Download speed limit | `limit != null` |
+| `--print-to-file after_move:%(filepath)s playlist.m3u` | Generate M3U | `m3uFile == true` |
+
+## Exceptions
+
+- **IOException**: Thrown if process execution fails or output cannot be written
+- **InterruptedException**: Thrown if download process is interrupted
+
+## Related Classes
+
+- `DownloadRequest`: Request object containing download parameters
+- `MediaFormat`: Enum defining supported formats (MP3, MP4)
+- `ProcessRunner`: Executes the yt-dlp process

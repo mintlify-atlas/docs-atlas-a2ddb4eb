@@ -1,0 +1,330 @@
+---
+title: Media Library
+description: Manage your local media collection with scanning, filtering, searching, and deletion capabilities
+---
+
+## Overview
+
+The Media Library provides a comprehensive view of all media files in your download directory. It automatically scans for audio and video files, displays metadata, and allows you to organize and manage your collection.
+
+## Library Scanning
+
+ViewTool automatically scans your download directory to build the media library:
+
+```java:src/main/java/martin/viewtool/core/MediaLibrary.java
+public List<MediaItem> scan(Path dir) throws IOException {
+    if (!Files.isDirectory(dir)) 
+        return List.of();
+    try (Stream<Path> s = Files.list(dir)) {
+        return s.filter(Files::isRegularFile)
+                .map(this::tosafeFile)
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(MediaItem::getDate).reversed())
+                .toList();
+    }
+}
+```
+
+<Note>
+Files are automatically sorted by modification date, with the most recent files appearing first.
+</Note>
+
+## Media Item Structure
+
+Each scanned file is represented as a `MediaItem` with comprehensive metadata:
+
+```java:src/main/java/martin/viewtool/core/MediaItem.java
+public final class MediaItem {
+    private final Path path;
+    private final String name;
+    private final String ext;
+    private final long sizeBytes;
+    private final String mimeType;
+    private final Instant date;
+}
+```
+
+### Metadata Extraction
+
+The library extracts file metadata during scanning:
+
+```java:src/main/java/martin/viewtool/core/MediaLibrary.java
+private MediaItem tosafeFile(Path p) {
+    try {
+        String name = p.getFileName().toString();
+        String ext = extOf(name);
+        long size = Files.size(p);
+        String mime = Optional.ofNullable(Files.probeContentType(p))
+                              .orElse(mimeByExt(ext));
+        BasicFileAttributes a = Files.readAttributes(p, BasicFileAttributes.class);
+        Instant date = a.lastModifiedTime() != null ? 
+            a.lastModifiedTime().toInstant() : 
+            (a.creationTime() != null ? a.creationTime().toInstant() : Instant.EPOCH);
+        return new MediaItem(p, name, ext, size, mime, date);
+    } catch (Exception e) {
+        return null;
+    }
+}
+```
+
+<Warning>
+Files that fail metadata extraction are silently skipped to prevent library corruption.
+</Warning>
+
+## MIME Type Detection
+
+ViewTool detects media types using both Java's built-in detection and extension-based fallback:
+
+```java:src/main/java/martin/viewtool/core/MediaLibrary.java
+private static String mimeByExt(String ext) {
+    return switch (ext) {
+        case "mp4","m4v","mov" -> "video/mp4";
+        case "mp3" -> "audio/mpeg";
+        case "m4a","aac" -> "audio/mp4";
+        case "webm" -> "video/webm";
+        case "wav" -> "audio/wav";
+        default -> "application/octet-stream";
+    };
+}
+```
+
+## Filtering by Media Type
+
+The library supports filtering files by audio or video type:
+
+```java:src/main/java/martin/viewtool/core/LibraryService.java
+public List<MediaItem> getFilteredFiles(String filter) throws IOException {
+    List<MediaItem> allItems = mediaLibrary.scan(downloadDir);
+
+    return allItems.stream()
+            .filter(item -> switch (filter) {
+                case "All" -> item.getMimeType().startsWith("video/") || 
+                              item.getMimeType().startsWith("audio/");
+                case "Videos" -> item.getMimeType().startsWith("video/");
+                case "Audios" -> item.getMimeType().startsWith("audio/");
+                default -> true;
+            })
+            .collect(Collectors.toList());
+}
+```
+
+<Steps>
+  <Step title="Select Filter Type">
+    Use the combo box to choose between:
+    - **All**: Shows both audio and video files
+    - **Videos**: Shows only video files (MP4, M4V, MOV, WebM)
+    - **Audios**: Shows only audio files (MP3, M4A, AAC, WAV)
+  </Step>
+
+  <Step title="Refresh Library">
+    Click the refresh button to rescan the directory and update the list:
+
+    ```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+    private void refreshLocalList() {
+        try {
+            String selected = (String) comboFilter.getSelectedItem();
+            DefaultListModel<String> model = 
+                managementService.getUpdatedLocalListModel(selected);
+            listFiles.setModel(model);
+        } catch (IOException ex) {
+            Alerts.error(this, "Error: " + ex.getMessage());
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Search Functionality
+
+ViewTool provides real-time search across the media library using live filtering:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void LiveSearchOnTable() {
+    textFieldFile.getDocument().addDocumentListener(new DocumentListener() {
+        @Override
+        public void insertUpdate(DocumentEvent e) {
+            applyTableFilter();
+        }
+
+        @Override
+        public void removeUpdate(DocumentEvent e) {
+            applyTableFilter();
+        }
+
+        @Override
+        public void changedUpdate(DocumentEvent e) {
+            applyTableFilter();
+        }
+    });
+}
+```
+
+### Search Implementation
+
+The search filters across multiple fields:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void applyTableFilter() {
+    String searchText = textFieldFile.getText().toLowerCase();
+
+    if (searchText.isBlank()) {
+        tableModel.setList(fullMediaList);
+    } else {
+        List<Media> filtered = new ArrayList<>();
+
+        for (Media media : fullMediaList) {
+            String fileName = (media.mediaFileName != null) ? 
+                media.mediaFileName.toLowerCase() : "";
+            String nickName = tableModel.getUserNames()
+                .getOrDefault(media.userId, "").toLowerCase();
+            String url = (media.downloadedFromUrl != null) ? 
+                media.downloadedFromUrl.toLowerCase() : "";
+
+            if (fileName.contains(searchText) || 
+                nickName.contains(searchText) || 
+                url.contains(searchText)) {
+                filtered.add(media);
+            }
+        }
+        tableModel.setList(filtered);
+        currentPage = 1;
+    }
+    updatePagination();
+}
+```
+
+<Accordion title="Searchable Fields">
+  - **File Name**: The media file name
+  - **User Nickname**: The uploader's username (for network files)
+  - **Source URL**: The original YouTube URL
+</Accordion>
+
+## Pagination
+
+Large media libraries are paginated for better performance:
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private List<Media> fullMediaList = new java.util.ArrayList<>();
+private int currentPage = 1;
+private final int pageSize = 50;
+
+private void updatePagination() {
+    int totalItems = fullMediaList.size();
+    double result = totalItems / pageSize;
+    int totalPages = (int) Math.ceil(result);
+
+    labelPageStatus.setText("Page " + currentPage + " of " + totalPages);
+
+    buttonNext.setEnabled(currentPage < totalPages);
+    buttonPrev.setEnabled(currentPage > 1);
+
+    tableModel.updatePage(currentPage, pageSize);
+
+    SwingUtilities.invokeLater(() -> {
+        tableScrollPane.getVerticalScrollBar().setValue(0);
+    });
+}
+```
+
+<Note>
+Each page displays up to 50 media items. Use the navigation buttons to browse through pages.
+</Note>
+
+## Deleting Files
+
+Remove unwanted files from your library with built-in deletion:
+
+```java:src/main/java/martin/viewtool/core/MediaLibrary.java
+public boolean delete(MediaItem file) throws IOException {
+    return Files.deleteIfExists(file.getPath());
+}
+```
+
+### Delete Operation in UI
+
+```java:src/main/java/martin/viewtool/ui/PanelManagement.java
+private void buttonDeleteFileActionPerformed(java.awt.event.ActionEvent evt) {
+    Media file = getSelectedMedia("Delete");
+    if (file == null) {
+        return;
+    }
+
+    try {
+        if (managementService.deleteMedia(file)) {
+            Alerts.info(this, "File deleted successfully.");
+            refreshLocalList();
+        } else {
+            utils.showFeedback(infoLabel, "You can't delete this media.", true);
+        }
+    } catch (Exception ex) {
+        utils.showFeedback(infoLabel, "You can't delete this media.", true);
+    }
+}
+```
+
+<Warning>
+Deleting a file is permanent and cannot be undone. The file is removed from your filesystem immediately.
+</Warning>
+
+## Combined Local and Network View
+
+The media library merges local files with network-synced media:
+
+```java:src/main/java/martin/viewtool/core/MediaService.java
+public List<Media> createMediaListCombined() {
+    List<Media> mediaListCombined = new ArrayList<>(networkMediaAll);
+    Set<String> networkNames = new HashSet<>();
+    
+    for (Media media : networkMediaAll) {
+        if (media != null && media.mediaFileName != null) {
+            networkNames.add(media.mediaFileName);
+        }
+    }
+    
+    File downloadDir = getDownloadBaseDir().toFile();
+    File[] localFiles = downloadDir.listFiles();
+
+    if (localFiles != null) {
+        for (File file : localFiles) {
+            if (file.isFile() && !networkNames.contains(file.getName())) {
+                Media media = new Media();
+                media.id = 0;
+                media.mediaFileName = file.getName();
+                media.userId = -1;
+                media.downloadedFromUrl = "Unknown";
+                mediaListCombined.add(media);
+            }
+        }
+    }
+    return mediaListCombined;
+}
+```
+
+This ensures you see both:
+- Files synchronized from the DI Media Network
+- Files downloaded directly to your local directory
+
+## Opening Media Files
+
+Double-click or use the open button to play media files:
+
+```java:src/main/java/martin/viewtool/core/ManagementService.java
+public void openLocalFile(Media media) throws Exception {
+    File localFile = mediaService.getLocalFile(media);
+
+    if (!localFile.exists()) {
+        throw new Exception("This media is not downloaded in the local directory.");
+    }
+
+    if (!java.awt.Desktop.isDesktopSupported()) {
+        throw new UnsupportedOperationException(
+            "Desktop API not supported on this platform.");
+    }
+
+    java.awt.Desktop.getDesktop().open(localFile);
+}
+```
+
+<Note>
+Files open in your system's default media player application.
+</Note>

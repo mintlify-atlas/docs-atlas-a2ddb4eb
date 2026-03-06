@@ -1,0 +1,516 @@
+---
+title: "Preferences Panel"
+description: "Application settings interface for configuring download directory, yt-dlp path, speed limits, and download options"
+---
+
+## Overview
+
+The `PanelPreferences` class (PanelPreferences.java:19) provides a comprehensive settings interface where users can configure:
+
+- Output directory for downloads
+- yt-dlp executable location
+- Download speed limits
+- M3U playlist file generation
+
+## Layout and Dimensions
+
+The preferences panel uses absolute positioning (null layout) with a size of 814 x 600 pixels:
+
+```java
+panelPreferences.setLayout(null);
+panelPreferences.setDefaultSize(814, 594);
+```
+
+PanelPreferences.java:95, 183-190
+
+<Note>
+While absolute positioning provides precise control over component placement, it sacrifices automatic responsive behavior. All coordinates are fixed pixel positions.
+</Note>
+
+## Configuration Options
+
+### Download Directory Selection
+
+**Select Folder Button**
+
+- **Icon**: `selectfoldericon.png` (35x30)
+- **Position**: (150, 30)
+- **Label**: "Select Folder :" at (50, 30)
+
+```java
+buttonDirectory.setIcon(utils.getFixedSizeIcon("selectfoldericon.png", 35, 30));
+buttonDirectory.setBounds(150, 30, 50, 33);
+utils.setHoverButton(buttonDirectory);
+```
+
+PanelPreferences.java:38, 108
+
+**File Chooser Configuration**
+
+```java
+fileChooserDirDown.setAcceptAllFileFilterUsed(false);
+fileChooserDirDown.setCurrentDirectory(
+    new java.io.File("C:\\Users\\cesar\\ViewToolDownloads"));
+fileChooserDirDown.setDialogTitle("Select download directory");
+fileChooserDirDown.setFileSelectionMode(
+    javax.swing.JFileChooser.DIRECTORIES_ONLY);
+```
+
+PanelPreferences.java:87-90
+
+**Directory Selection Handler**
+
+```java
+private void buttonDirectoryActionPerformed(java.awt.event.ActionEvent evt) {
+    int result = fileChooserDirDown.showOpenDialog(this);
+    if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+        File selectedDir = fileChooserDirDown.getSelectedFile();
+        
+        prefService.setOutputDir(selectedDir.toPath());
+        JOptionPane.showMessageDialog(this,
+            "Selected directory:\n" + selectedDir.getAbsolutePath(),
+            "Download folder", JOptionPane.INFORMATION_MESSAGE);
+    }
+}
+```
+
+PanelPreferences.java:193-203
+
+<Info>
+The file chooser is restricted to directories only (`DIRECTORIES_ONLY`), preventing users from accidentally selecting individual files.
+</Info>
+
+### yt-dlp Executable Location
+
+**Locate yt-dlp.exe Button**
+
+- **Icon**: `ytdlpicon.png` (40x40)
+- **Position**: (350, 30)
+- **Label**: "Locate yt-dlp.exe :" at (230, 40)
+
+```java
+buttonDirYt.setIcon(utils.getFixedSizeIcon("ytdlpicon.png", 40, 40));
+buttonDirYt.setBounds(350, 30, 50, 40);
+utils.setHoverButton(buttonDirYt);
+```
+
+PanelPreferences.java:36, 133
+
+**File Chooser for Executable**
+
+```java
+fileChooserYt.setAcceptAllFileFilterUsed(false);
+fileChooserYt.setCurrentDirectory(new java.io.File("C:\\Program Files"));
+```
+
+PanelPreferences.java:92-93
+
+**Selection Handler**
+
+```java
+private void buttonDirYtActionPerformed(java.awt.event.ActionEvent evt) {
+    int result = fileChooserYt.showOpenDialog(this);
+    if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+        File selectedDir = fileChooserYt.getSelectedFile();
+        
+        prefService.setYtDlpPath(selectedDir.toPath());
+        JOptionPane.showMessageDialog(this,
+            "Selected directory:\n" + selectedDir.getAbsolutePath(),
+            "Download folder", JOptionPane.INFORMATION_MESSAGE);
+    }
+}
+```
+
+PanelPreferences.java:218-228
+
+<Tip>
+The default starting directory for yt-dlp is `C:\Program Files`, which is a common installation location for executables on Windows.
+</Tip>
+
+### Download Speed Limit
+
+**Speed Limit Configuration**
+
+- **Label**: "Speed: (Current: XMB)" at (40, 110)
+- **Text Field**: (200, 110), width 100px
+- **Save Button**: (300, 110), icon: `saveicon.png` (21x21)
+- **Info Text**: "Set to 0 for no limit." at (200, 140)
+
+```java
+textFieldLimDown.setText(prefService.getLimitSpeed());
+labelLimDown.setText("Speed: (Current: " + 
+    prefService.getLimitSpeed() + "MB)");
+```
+
+PanelPreferences.java:30-31
+
+**Save Speed Limit Handler**
+
+```java
+private void buttonLimitDownloadActionPerformed(java.awt.event.ActionEvent evt) {
+    String speed = textFieldLimDown.getText();
+    try {
+        ValidationService.requireValidLimit(speed);
+        prefService.setLimitSpeed(speed);
+        
+        textFieldLimDown.setText(prefService.getLimitSpeed());
+        labelLimDown.setText("Speed: (Current: " + 
+            prefService.getLimitSpeed() + "MB)");
+    } catch (Exception ex) {
+        utils.showFeedback(infoLabel, "Only integer number.", true);
+    }
+}
+```
+
+PanelPreferences.java:205-216
+
+**Validation**
+
+The `ValidationService.requireValidLimit()` ensures:
+- Input is a valid integer
+- Value is non-negative
+- Value can be parsed correctly
+
+<Accordion title="Why use ValidationService?">
+Centralizing validation logic in a service:
+- Ensures consistent validation across the application
+- Makes validation rules reusable
+- Simplifies testing of validation logic
+- Provides clear error messages
+</Accordion>
+
+**Speed Limit Format**
+
+- Value is stored and displayed in megabytes (MB)
+- Setting to `0` means unlimited speed
+- Value is applied to yt-dlp downloads via command-line arguments
+
+```java
+buttonLimitDownload.setIcon(utils.getFixedSizeIcon("saveicon.png", 21, 21));
+buttonLimitDownload.setToolTipText("Save");
+buttonLimitDownload.setBounds(300, 110, 40, 20);
+utils.setHoverButton(buttonLimitDownload);
+```
+
+PanelPreferences.java:37, 121
+
+### M3U Playlist Generation
+
+**Checkbox Option**
+
+- **Label**: "Create a .m3u for playlist"
+- **Position**: (50, 210)
+- **Font**: Changes to bold when selected
+
+```java
+checkBoxM3u.setText("Create a .m3u for playlist");
+checkBoxM3u.setBounds(50, 210, 190, 30);
+```
+
+PanelPreferences.java:150
+
+**Public Accessor**
+
+```java
+public boolean isM3USelected() {
+    return checkBoxM3u.isSelected();
+}
+```
+
+PanelPreferences.java:45-47
+
+<Info>
+This method is called by PanelMain during downloads to determine whether to generate an M3U playlist file for downloaded media.
+</Info>
+
+**Font Style Toggle**
+
+```java
+private void checkBoxActionListener() {
+    checkBoxM3u.addActionListener(new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            if (checkBoxM3u.isSelected()) {
+                checkBoxM3u.setFont(UIUtils.BOLD_FONT);
+            } else {
+                checkBoxM3u.setFont(UIUtils.PLAIN_FONT);
+            }
+        }
+    });
+}
+```
+
+PanelPreferences.java:49-60
+
+<Tip>
+The bold font provides immediate visual feedback when the option is enabled, making the selected state obvious to users.
+</Tip>
+
+## Visual Elements
+
+### Decorative Graphics
+
+**Worker Icon**
+
+- **Image**: `workicon.png`
+- **Position**: (270, 220)
+- **Size**: 270 x 250 pixels
+
+```java
+labelWorkers.setIcon(new javax.swing.ImageIcon(
+    getClass().getResource("/images/workicon.png")));
+labelWorkers.setBounds(270, 220, 270, 250);
+```
+
+PanelPreferences.java:160-162
+
+**Coming Soon Text**
+
+- **Text**: "More features coming soon..."
+- **Position**: (270, 480)
+- **Font**: Segoe UI, Italic, 18pt
+
+```java
+labelTextComingSoon.setFont(new java.awt.Font("Segoe UI", 3, 18));
+labelTextComingSoon.setText("More features coming soon...");
+labelTextComingSoon.setBounds(270, 480, 260, 50);
+```
+
+PanelPreferences.java:164-167
+
+<Note>
+These decorative elements fill empty space and communicate future development plans to users.
+</Note>
+
+### Feedback Label
+
+**Info Label**
+
+- **Position**: (360, 100)
+- **Size**: 190 x 30 pixels
+- **Font**: Segoe UI, Bold, 12pt
+- **Initial Text**: "     " (spaces)
+
+```java
+infoLabel.setFont(new java.awt.Font("Segoe UI", 1, 12));
+infoLabel.setText("     ");
+infoLabel.setBounds(360, 100, 190, 30);
+```
+
+PanelPreferences.java:174-177
+
+Used to display validation errors:
+
+```java
+utils.showFeedback(infoLabel, "Only integer number.", true);
+```
+
+PanelPreferences.java:214
+
+## Button Styling
+
+All buttons share consistent styling:
+
+```java
+private void agrupedIcon() {
+    buttonDirYt.setIcon(utils.getFixedSizeIcon("ytdlpicon.png", 40, 40));
+    buttonLimitDownload.setIcon(utils.getFixedSizeIcon("saveicon.png", 21, 21));
+    buttonDirectory.setIcon(utils.getFixedSizeIcon("selectfoldericon.png", 35, 30));
+    
+    utils.setHoverButton(buttonDirYt);
+    utils.setHoverButton(buttonLimitDownload);
+    utils.setHoverButton(buttonDirectory);
+}
+```
+
+PanelPreferences.java:35-43
+
+**Common Properties**:
+- White background
+- No border (`setBorder(null)`)
+- No border painting (`setBorderPainted(false)`)
+- Hover effects via UIUtils
+- Custom icons with fixed sizes
+
+## Preferences Service Integration
+
+All settings are persisted via `PreferencesService`:
+
+```java
+private final PreferencesService prefService = new PreferencesService();
+```
+
+PanelPreferences.java:21
+
+### Service Methods Used
+
+| Method | Purpose |
+|--------|----------|
+| `getOutputDir()` | Retrieve current download directory |
+| `setOutputDir(Path)` | Save download directory preference |
+| `getYtDlpPath()` | Retrieve yt-dlp executable path |
+| `setYtDlpPath(Path)` | Save yt-dlp path preference |
+| `getLimitSpeed()` | Retrieve speed limit setting |
+| `setLimitSpeed(String)` | Save speed limit preference |
+
+<Info>
+PreferencesService likely uses Java's Preferences API or properties files to persist settings across application sessions.
+</Info>
+
+## Initialization Flow
+
+```java
+public PanelPreferences() {
+    initComponents();
+    agrupedIcon();
+    
+    // Load and display current speed limit
+    textFieldLimDown.setText(prefService.getLimitSpeed());
+    labelLimDown.setText("Speed: (Current: " + 
+        prefService.getLimitSpeed() + "MB)");
+    
+    checkBoxActionListener();
+}
+```
+
+PanelPreferences.java:26-34
+
+**Steps**:
+1. Initialize all UI components (auto-generated code)
+2. Configure button icons and hover effects
+3. Load current speed limit from preferences
+4. Update label to show current limit
+5. Attach checkbox listener for font styling
+
+## Component Positions Reference
+
+| Component | X | Y | Width | Height |
+|-----------|---|---|-------|--------|
+| buttonDirectory | 150 | 30 | 50 | 33 |
+| buttonDirYt | 350 | 30 | 50 | 40 |
+| labelSelectFolder | 50 | 30 | 110 | 40 |
+| labelYtdDlp | 230 | 40 | 120 | 16 |
+| labelLimDown | 40 | 110 | 160 | 16 |
+| textFieldLimDown | 200 | 110 | 100 | 20 |
+| buttonLimitDownload | 300 | 110 | 40 | 20 |
+| labelExtraInfo | 200 | 140 | 140 | 16 |
+| checkBoxM3u | 50 | 210 | 190 | 30 |
+| labelWorkers | 270 | 220 | 270 | 250 |
+| infoLabel | 360 | 100 | 190 | 30 |
+| labelTextComingSoon | 270 | 480 | 260 | 50 |
+
+## User Workflow
+
+### Setting Download Directory
+
+1. User clicks the folder icon button
+2. File chooser opens at default location
+3. User navigates to desired directory
+4. User selects directory and clicks "Open"
+5. PreferencesService saves the path
+6. Confirmation dialog shows selected path
+
+### Configuring Speed Limit
+
+1. User enters numeric value in text field
+2. User clicks save icon button
+3. ValidationService validates the input
+4. If valid:
+   - PreferencesService saves the value
+   - Label updates to show "(Current: XMB)"
+   - Text field shows saved value
+5. If invalid:
+   - Error message appears in info label
+   - Previous value remains unchanged
+
+<Accordion title="What happens with invalid input?">
+If the user enters non-numeric text or negative numbers:
+- ValidationService throws an exception
+- The catch block displays "Only integer number." error
+- The previous valid value is retained
+- The text field and label are not updated
+</Accordion>
+
+### Locating yt-dlp
+
+1. User clicks the yt-dlp icon button
+2. File chooser opens at "C:\\Program Files"
+3. User navigates to yt-dlp.exe location
+4. User selects the executable file
+5. PreferencesService saves the path
+6. Confirmation dialog shows selected path
+
+<Tip>
+yt-dlp must be separately installed. The application requires the path to the executable to perform YouTube downloads.
+</Tip>
+
+## Error Handling
+
+### Speed Limit Validation
+
+```java
+try {
+    ValidationService.requireValidLimit(speed);
+    prefService.setLimitSpeed(speed);
+    // Update UI with new value
+} catch (Exception ex) {
+    utils.showFeedback(infoLabel, "Only integer number.", true);
+}
+```
+
+PanelPreferences.java:207-215
+
+**Error scenarios**:
+- Empty input
+- Non-numeric characters
+- Negative numbers
+- Decimal numbers (if integers required)
+- Extremely large values
+
+### File Selection
+
+File chooser operations check the result:
+
+```java
+int result = fileChooserDirDown.showOpenDialog(this);
+if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+    // Process selection
+}
+```
+
+PanelPreferences.java:194-195
+
+**Possible results**:
+- `APPROVE_OPTION`: User selected file/directory
+- `CANCEL_OPTION`: User cancelled dialog
+- `ERROR_OPTION`: Error occurred
+
+If user cancels, no action is taken and preferences remain unchanged.
+
+## Best Practices
+
+<Tip>
+When working with PanelPreferences:
+- Always validate user input before saving to preferences
+- Provide immediate visual feedback for all actions
+- Show current values when the panel loads
+- Use confirmation dialogs to confirm important changes
+- Handle both valid and invalid input gracefully
+- Keep the UI responsive - don't block on file operations
+- Test with various input types (empty, negative, large numbers)
+</Tip>
+
+## Future Enhancements
+
+The "More features coming soon..." label suggests planned additions:
+
+- Additional download options
+- Quality selection presets
+- Subtitle preferences
+- Audio/video codec settings
+- Proxy configuration
+- Advanced yt-dlp arguments
+
+<Note>
+The worker icon and coming soon text occupy significant space (270x250 for icon, additional space for text), indicating room for substantial feature expansion.
+</Note>

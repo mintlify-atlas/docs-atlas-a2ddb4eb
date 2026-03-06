@@ -1,0 +1,436 @@
+---
+title: FFmpeg Configuration
+description: Install and configure FFmpeg for audio conversion and format support in ViewTool
+---
+
+## Overview
+
+ViewTool uses [FFmpeg](https://ffmpeg.org/) for audio conversion, particularly when downloading content in MP3 format. FFmpeg is a powerful multimedia framework that handles audio/video conversion, streaming, and more.
+
+<Warning>
+FFmpeg is **required** for MP3 downloads. Without FFmpeg, yt-dlp cannot convert audio to MP3 format, and downloads will fail.
+</Warning>
+
+## Why FFmpeg is Required
+
+When you select MP3 format in ViewTool, yt-dlp performs these steps:
+
+<Steps>
+  <Step title="Download Video">
+    Downloads the video with the best audio quality from YouTube
+  </Step>
+
+  <Step title="Extract Audio">
+    Extracts the audio stream from the video file
+  </Step>
+
+  <Step title="Convert to MP3">
+    Uses FFmpeg to convert the audio to MP3 format at the specified quality:
+
+    ```java YtDlpService.java
+    case MP3 -> {
+        commands.add("-x");              // Extract audio
+        commands.add("--audio-format");
+        commands.add("mp3");
+        commands.add("--audio-quality");
+        commands.add("0");               // Best quality (320kbps)
+    }
+    ```
+  </Step>
+</Steps>
+
+## Installing FFmpeg
+
+### Windows Installation
+
+<Steps>
+  <Step title="Download FFmpeg">
+    Download the latest FFmpeg build for Windows:
+
+    <CodeGroup>
+    ```bash Official Website
+    https://ffmpeg.org/download.html#build-windows
+    ```
+
+    ```bash BtbN Builds (Recommended)
+    https://github.com/BtbN/FFmpeg-Builds/releases
+    ```
+    </CodeGroup>
+
+    Download the file named `ffmpeg-master-latest-win64-gpl.zip` or similar.
+  </Step>
+
+  <Step title="Extract Files">
+    Extract the ZIP file to a permanent location, such as:
+    ```bash
+    C:\Program Files\ffmpeg\
+    ```
+
+    The extracted folder structure will look like:
+    ```
+    ffmpeg/
+    ├─ bin/
+    │  ├─ ffmpeg.exe
+    │  ├─ ffprobe.exe
+    │  └─ ffplay.exe
+    ├─ doc/
+    └─ presets/
+    ```
+  </Step>
+
+  <Step title="Add to System PATH">
+    Add FFmpeg to your system PATH so yt-dlp can find it:
+
+    1. Open **System Properties** → **Advanced** → **Environment Variables**
+    2. Under **System variables**, find and select **Path**
+    3. Click **Edit** → **New**
+    4. Add the path to FFmpeg's `bin` folder:
+       ```bash
+       C:\Program Files\ffmpeg\bin
+       ```
+    5. Click **OK** to save
+  </Step>
+
+  <Step title="Verify Installation">
+    Open a new Command Prompt and run:
+
+    ```bash
+    ffmpeg -version
+    ```
+
+    You should see version information like:
+    ```
+    ffmpeg version 2024-03-10-git-... Copyright (c) 2000-2024 the FFmpeg developers
+    ```
+  </Step>
+</Steps>
+
+<Note>
+You must open a **new** Command Prompt or PowerShell window after modifying PATH. Existing windows won't see the updated PATH.
+</Note>
+
+### Alternative Installation Methods
+
+<CodeGroup>
+```bash Chocolatey
+# Install using Chocolatey package manager
+choco install ffmpeg
+```
+
+```bash Scoop
+# Install using Scoop package manager
+scoop install ffmpeg
+```
+
+```bash winget
+# Install using Windows Package Manager
+winget install FFmpeg
+```
+</CodeGroup>
+
+## How ViewTool Uses FFmpeg
+
+FFmpeg operates behind the scenes through yt-dlp. ViewTool doesn't directly call FFmpeg; instead, yt-dlp automatically invokes FFmpeg when needed.
+
+### Audio Conversion Process
+
+When downloading as MP3:
+
+```java YtDlpService.java
+switch (req.format()) {
+    case MP3 -> {
+        // These flags tell yt-dlp to use FFmpeg for conversion
+        commands.add("-x");                // Extract audio
+        commands.add("--audio-format");
+        commands.add("mp3");
+        commands.add("--audio-quality");
+        commands.add("0");                 // Best quality
+    }
+}
+```
+
+yt-dlp executes an FFmpeg command similar to:
+
+```bash
+ffmpeg -i input.m4a -vn -acodec libmp3lame -q:a 0 output.mp3
+```
+
+### Supported Audio Formats
+
+FFmpeg enables conversion to multiple audio formats:
+
+<CodeGroup>
+```java MP3 Conversion
+// High-quality MP3 (320kbps)
+commands.add("-x");
+commands.add("--audio-format");
+commands.add("mp3");
+commands.add("--audio-quality");
+commands.add("0");  // 0 = best, 9 = worst
+```
+
+```java M4A Conversion
+// M4A audio-only from MP4
+if (req.audioOnly() && req.format() == MediaFormat.MP4) {
+    commands.add("-x");
+    commands.add("--audio-format");
+    commands.add("m4a");
+}
+```
+</CodeGroup>
+
+### Quality Settings
+
+ViewTool uses the highest audio quality:
+
+```java
+commands.add("--audio-quality");
+commands.add("0");  // Best quality (320kbps for MP3)
+```
+
+yt-dlp audio quality scale:
+- `0` = Best quality (~320kbps for MP3)
+- `5` = Medium quality (~128kbps for MP3)
+- `9` = Worst quality (~64kbps for MP3)
+
+<Note>
+ViewTool always uses quality `0` to ensure the best audio output.
+</Note>
+
+## Format Support Matrix
+
+FFmpeg enables these download options in ViewTool:
+
+| Format | Audio Only | Video | FFmpeg Required | Output Extension |
+|--------|------------|-------|-----------------|------------------|
+| MP3    | Yes        | No    | **Yes**         | `.mp3`           |
+| MP4    | No         | Yes   | Recommended*    | `.mp4`           |
+| MP4 (Audio) | Yes   | No    | **Yes**         | `.m4a`           |
+
+<Note>
+*While MP4 video downloads work without FFmpeg, it's highly recommended for optimal quality merging of video and audio streams.
+</Note>
+
+## About FFmpeg and ffprobe
+
+FFmpeg comes with companion tools:
+
+### ffmpeg.exe
+The main conversion tool that processes audio and video:
+- Audio extraction
+- Format conversion
+- Quality adjustment
+- Stream merging
+
+### ffprobe.exe
+A media analysis tool used by yt-dlp to:
+- Detect file formats
+- Read metadata
+- Verify stream quality
+- Check codec compatibility
+
+```java ViewToolApp.java
+TextAreaAbout.setText(
+    "Author: César Martín Pérez.\n" +
+    "Subject: DI - DAM 2025/2026\n" +
+    "Date: 27/10/2025\n\n" +
+    "Recourses:\n" +
+    "- yt-dlp\n" +
+    "- ffmpeg/ffprobe\n"
+);
+```
+
+Both executables must be in your system PATH for full functionality.
+
+## Process Execution
+
+ViewTool executes yt-dlp (which then calls FFmpeg) through the `ProcessRunner` class:
+
+```java ProcessRunner.java
+public static int run(
+        List<String> commands, 
+        File fileDirectory, 
+        Appendable out, 
+        IntConsumer onPercent) throws IOException, InterruptedException {
+    
+    ProcessBuilder pb = new ProcessBuilder(commands);
+    if (fileDirectory != null) {
+        pb.directory(fileDirectory);
+    }
+    pb.redirectErrorStream(true);
+
+    Process p = pb.start();
+
+    try (BufferedReader br = new BufferedReader(
+            new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+        String line;
+        while ((line = br.readLine()) != null) {
+            if (out != null) {
+                out.append(line).append('\n');
+            }
+            // Progress parsing...
+        }
+    }
+    return p.waitFor();
+}
+```
+
+This architecture allows ViewTool to:
+- Execute external processes (yt-dlp, FFmpeg)
+- Capture real-time output
+- Parse progress information
+- Handle errors gracefully
+
+## Troubleshooting
+
+### FFmpeg Not Found
+
+**Error from yt-dlp:**
+```
+ERROR: ffmpeg not found. Please install ffmpeg or avconv
+```
+
+**Solutions:**
+<Steps>
+  <Step title="Verify FFmpeg is Installed">
+    Run in Command Prompt:
+    ```bash
+    ffmpeg -version
+    ```
+    If you see an error, FFmpeg isn't properly installed or in PATH.
+  </Step>
+
+  <Step title="Check PATH Configuration">
+    Ensure FFmpeg's `bin` directory is in your system PATH:
+    ```bash
+    echo %PATH%
+    ```
+    Look for a path like `C:\Program Files\ffmpeg\bin`
+  </Step>
+
+  <Step title="Restart ViewTool">
+    After adding FFmpeg to PATH, restart ViewTool to pick up the new environment variables.
+  </Step>
+</Steps>
+
+### MP3 Conversion Fails
+
+**Error:** Download succeeds but MP3 file is not created
+
+**Solutions:**
+- Verify FFmpeg is installed and in PATH
+- Check ViewTool's log output for FFmpeg error messages
+- Ensure you have write permissions to the output directory
+- Try updating FFmpeg to the latest version
+
+### Audio Quality Issues
+
+**Issue:** MP3 files sound low quality
+
+**Explanation:** ViewTool uses quality setting `0` (best quality):
+```java
+commands.add("--audio-quality");
+commands.add("0");
+```
+
+If quality still seems poor:
+- The source video may have low-quality audio
+- YouTube may not provide high-quality audio for all videos
+- Try downloading as M4A instead (often higher quality than MP3)
+
+### Conversion Takes Too Long
+
+**Issue:** MP3 conversion is very slow
+
+**Solutions:**
+- This is normal for high-quality conversions
+- FFmpeg is CPU-intensive when converting audio
+- Consider using M4A format for faster processing (no transcoding needed)
+- Upgrade your CPU or close other resource-intensive applications
+
+### Missing Audio in MP4
+
+**Error:** Downloaded MP4 file has no audio
+
+**Solutions:**
+- Install FFmpeg (even for video downloads)
+- FFmpeg merges separate video and audio streams
+- Without FFmpeg, yt-dlp may only download video stream
+
+## Advanced Configuration
+
+### Custom FFmpeg Location
+
+If FFmpeg is not in your PATH, yt-dlp can be told where to find it:
+
+```bash
+yt-dlp --ffmpeg-location "C:\Path\To\ffmpeg\bin" [other options]
+```
+
+<Note>
+ViewTool doesn't currently support custom FFmpeg paths. FFmpeg must be in your system PATH.
+</Note>
+
+### FFmpeg Codecs
+
+FFmpeg supports numerous audio codecs:
+
+| Codec | Extension | Quality | Use Case |
+|-------|-----------|---------|----------|
+| MP3 (libmp3lame) | `.mp3` | Good | Universal compatibility |
+| AAC (libfdk_aac) | `.m4a` | Excellent | Modern devices |
+| Opus | `.opus` | Excellent | Web streaming |
+| FLAC | `.flac` | Lossless | Archival |
+| Vorbis | `.ogg` | Good | Open source preference |
+
+ViewTool currently supports MP3 and M4A formats.
+
+## Performance Considerations
+
+### CPU Usage
+
+FFmpeg audio conversion is CPU-intensive:
+- Expect 20-50% CPU usage during conversion
+- Conversion time depends on audio length and quality
+- A 5-minute video typically converts in 10-30 seconds
+
+### Disk I/O
+
+FFmpeg creates temporary files during conversion:
+1. Downloads source audio (e.g., `.m4a`)
+2. Converts to target format (e.g., `.mp3`)
+3. Deletes temporary source file
+
+Ensure sufficient disk space (at least 500MB free recommended).
+
+## Testing Your FFmpeg Installation
+
+Verify FFmpeg works correctly:
+
+<CodeGroup>
+```bash Test Version
+ffmpeg -version
+```
+
+```bash Test Encoders
+ffmpeg -encoders | findstr mp3
+```
+
+```bash Test Conversion
+ffmpeg -f lavfi -i sine=frequency=1000:duration=5 -acodec libmp3lame test.mp3
+```
+</CodeGroup>
+
+The last command creates a 5-second test MP3 file with a 1000Hz tone.
+
+## Next Steps
+
+- [Initial Setup](/configuration/setup) - Configure ViewTool preferences
+- [yt-dlp Configuration](/configuration/yt-dlp) - Set up the download engine
+- Start downloading high-quality audio with MP3 support
+
+## Additional Resources
+
+- [FFmpeg Official Documentation](https://ffmpeg.org/documentation.html)
+- [FFmpeg Wiki](https://trac.ffmpeg.org/)
+- [yt-dlp FFmpeg Integration](https://github.com/yt-dlp/yt-dlp#post-processing-options)

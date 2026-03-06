@@ -1,0 +1,298 @@
+---
+title: Preferences
+description: Configure ViewTool settings including download paths, yt-dlp location, and download speed limits
+---
+
+## Overview
+
+The Preferences panel allows you to customize ViewTool's behavior and configure essential paths and download settings. All preferences are persisted using Java's Preferences API and survive application restarts.
+
+## Preferences Storage
+
+ViewTool uses the Java Preferences API for persistent configuration:
+
+```java:src/main/java/martin/viewtool/config/PreferencesService.java
+public class PreferencesService {
+    private static final String KEY_YTDLP = "ytdlp.path";
+    private static final String KEY_OUTPUT = "output.dir";
+    private static final String KEY_LIMIT_RATE = "limit_rate";
+
+    private final Preferences prefs = 
+        Preferences.userRoot().node("martin.viewtool");
+}
+```
+
+<Note>
+Preferences are stored in the user's registry (Windows) or preferences directory (Linux/macOS) and persist across application restarts.
+</Note>
+
+## Download Directory
+
+### Setting the Output Directory
+
+Choose where downloaded media files are saved:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+private void buttonDirectoryActionPerformed(java.awt.event.ActionEvent evt) {
+    int result = fileChooserDirDown.showOpenDialog(this);
+    if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+        File selectedDir = fileChooserDirDown.getSelectedFile();
+
+        prefService.setOutputDir(selectedDir.toPath());
+        JOptionPane.showMessageDialog(this,
+            "Selected directory:\n" + selectedDir.getAbsolutePath(),
+            "Download folder", JOptionPane.INFORMATION_MESSAGE);
+    }
+}
+```
+
+### Getter with Auto-Creation
+
+The output directory is created automatically if it doesn't exist:
+
+```java:src/main/java/martin/viewtool/config/PreferencesService.java
+public Path getOutputDir() {
+    Path defaultPath = Path.of(System.getProperty("user.home"), 
+                              "ViewToolDownloads");
+    
+    Path path = Path.of(prefs.get(KEY_OUTPUT, defaultPath.toString()));
+
+    if (!java.nio.file.Files.exists(path)) {
+        try {
+            java.nio.file.Files.createDirectories(path);
+        } catch (Exception e) {
+            System.err.print(
+                "The output directory could not be created.: " + 
+                e.getMessage());
+        }
+    }
+
+    return path;
+}
+```
+
+<Accordion title="Default Download Location">
+  If no directory is configured, ViewTool defaults to `~/ViewToolDownloads` in your home directory. This folder is created automatically on first run.
+</Accordion>
+
+## yt-dlp Configuration
+
+ViewTool requires yt-dlp to download YouTube content. Configure its location in preferences:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+private void buttonDirYtActionPerformed(java.awt.event.ActionEvent evt) {
+    int result = fileChooserYt.showOpenDialog(this);
+    if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+        File selectedDir = fileChooserYt.getSelectedFile();
+
+        prefService.setYtDlpPath(selectedDir.toPath());
+        JOptionPane.showMessageDialog(this,
+            "Selected directory:\n" + selectedDir.getAbsolutePath(),
+            "Download folder", JOptionPane.INFORMATION_MESSAGE);
+    }
+}
+```
+
+### yt-dlp Path Management
+
+```java:src/main/java/martin/viewtool/config/PreferencesService.java
+public void setYtDlpPath(Path p) {
+    prefs.put(KEY_YTDLP, p.toString());
+}
+
+public Path getYtDlpPath() {
+    return Path.of(prefs.get(KEY_YTDLP, "yt-dlp"));
+}
+```
+
+<Warning>
+If yt-dlp is not in your system PATH, you must manually specify its location. On Windows, select the `yt-dlp.exe` file. On Linux/macOS, select the `yt-dlp` binary.
+</Warning>
+
+<Steps>
+  <Step title="Download yt-dlp">
+    Download yt-dlp from [https://github.com/yt-dlp/yt-dlp/releases](https://github.com/yt-dlp/yt-dlp/releases)
+  </Step>
+
+  <Step title="Install or Extract">
+    Place the executable in a permanent location, such as `C:\Program Files\yt-dlp\` on Windows or `/usr/local/bin/` on Linux.
+  </Step>
+
+  <Step title="Configure in ViewTool">
+    Click the yt-dlp icon in the Preferences panel and navigate to the executable location.
+  </Step>
+</Steps>
+
+## Download Speed Limiting
+
+Control download bandwidth to avoid network saturation:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+private void buttonLimitDownloadActionPerformed(java.awt.event.ActionEvent evt) {
+    String speed = textFieldLimDown.getText();
+    try {
+        ValidationService.requireValidLimit(speed);
+        prefService.setLimitSpeed(speed);
+        
+        textFieldLimDown.setText(prefService.getLimitSpeed());
+        labelLimDown.setText("Speed: (Current: " + 
+            prefService.getLimitSpeed() + "MB)");
+    } catch (Exception ex) {
+        utils.showFeedback(infoLabel, "Only integer number.", true);
+    }
+}
+```
+
+### Speed Limit Storage
+
+```java:src/main/java/martin/viewtool/config/PreferencesService.java
+public String getLimitSpeed() {
+    return prefs.get(KEY_LIMIT_RATE, "");
+}
+
+public void setLimitSpeed(String raw) {
+    prefs.put(KEY_LIMIT_RATE, raw != null ? raw : "");
+}
+```
+
+### Usage in Downloads
+
+The speed limit is applied to yt-dlp during downloads:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+if (req.limit() != null) {
+    commands.add("--limit-rate");
+    commands.add(req.limit());
+}
+```
+
+<Note>
+Speed limits are specified in megabytes per second (MB/s). Set to `0` or leave empty for unlimited download speed.
+</Note>
+
+### Validation
+
+The application validates that speed limits are numeric:
+
+```java:src/main/java/martin/viewtool/ui/PanelMain.java
+controller.validateSpeed(limit);
+```
+
+Invalid values trigger an error message and prevent the download from starting.
+
+## M3U Playlist Creation
+
+Enable automatic M3U playlist file generation for batch downloads:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+public boolean isM3USelected() {
+    return checkBoxM3u.isSelected();
+}
+
+private void checkBoxActionListener() {
+    checkBoxM3u.addActionListener(new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            if (checkBoxM3u.isSelected()) {
+                checkBoxM3u.setFont(UIUtils.BOLD_FONT);
+            } else {
+                checkBoxM3u.setFont(UIUtils.PLAIN_FONT);
+            }
+        }
+    });
+}
+```
+
+When enabled, a `playlist.m3u` file is created in your download directory:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+if (req.m3uFile()) {
+    commands.add("--print-to-file");
+    commands.add("after_move:%(filepath)s");
+    commands.add(req.outputDir().resolve("playlist.m3u").toString());
+}
+```
+
+<Accordion title="M3U Playlist Benefits">
+  M3U playlists allow you to:
+  - Import all downloads into media players at once
+  - Create curated playlists from YouTube content
+  - Organize downloads by category or theme
+  - Share playlist files with other media players
+</Accordion>
+
+## Preference Initialization
+
+The preferences panel displays current values on load:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+public PanelPreferences() {
+    initComponents();
+    agrupedIcon();
+    
+    // Display current speed limit
+    textFieldLimDown.setText(prefService.getLimitSpeed());
+    labelLimDown.setText("Speed: (Current: " + 
+        prefService.getLimitSpeed() + "MB)");
+    
+    checkBoxActionListener();
+}
+```
+
+This ensures users can see their current configuration at a glance.
+
+## File Chooser Configuration
+
+The download directory chooser is configured to only show directories:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+fileChooserDirDown.setAcceptAllFileFilterUsed(false);
+fileChooserDirDown.setCurrentDirectory(
+    new java.io.File("C:\\Users\\cesar\\ViewToolDownloads"));
+fileChooserDirDown.setDialogTitle("Select download directory");
+fileChooserDirDown.setFileSelectionMode(
+    javax.swing.JFileChooser.DIRECTORIES_ONLY);
+```
+
+The yt-dlp chooser allows file selection:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+fileChooserYt.setAcceptAllFileFilterUsed(false);
+fileChooserYt.setCurrentDirectory(new java.io.File("C:\\Program Files"));
+```
+
+## Visual Feedback
+
+The preferences panel provides immediate visual feedback:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+private final UIUtils utils = new UIUtils();
+
+// On save success:
+labelLimDown.setText("Speed: (Current: " + prefService.getLimitSpeed() + "MB)");
+
+// On validation failure:
+utils.showFeedback(infoLabel, "Only integer number.", true);
+```
+
+The `UIUtils.showFeedback` method displays temporary success or error messages that auto-dismiss after a few seconds.
+
+<Note>
+Changes to preferences take effect immediately. Downloads in progress will not be affected until the next download starts.
+</Note>
+
+## Advanced Settings (Coming Soon)
+
+The preferences panel includes a placeholder for future features:
+
+```java:src/main/java/martin/viewtool/ui/PanelPreferences.java
+labelTextComingSoon.setFont(new java.awt.Font("Segoe UI", 3, 18));
+labelTextComingSoon.setText("More features coming soon...");
+```
+
+Future preferences may include:
+- Concurrent download limits
+- Video quality presets
+- Audio bitrate selection
+- Subtitle download options
+- Proxy configuration

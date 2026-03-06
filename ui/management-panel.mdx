@@ -1,0 +1,577 @@
+---
+title: "Management Panel"
+description: "Media library management interface with local files list, network media table, and comprehensive file operations"
+---
+
+## Overview
+
+The `PanelManagement` class (PanelManagement.java:53) provides a dual-pane interface for managing both local downloaded files and network-available media. It features real-time synchronization, pagination, search, and comprehensive media operations.
+
+## UI Layout
+
+The management panel consists of two primary sections displayed side-by-side:
+
+### Left Section: Local Files (JList)
+
+**Dimensions**: 550 x 420 pixels
+
+- Displays files downloaded to the local directory
+- Filter combo box: "All", "Videos", "Audios"
+- Refresh button for manual updates
+- Tooltip shows download directory path
+
+```java
+listFiles.setToolTipText("Archivos descargados en: " + 
+    prefService.getOutputDir().toString());
+```
+
+PanelManagement.java:588
+
+### Right Section: Network Media Library (JTable)
+
+**Dimensions**: 950 x 420 pixels
+
+- Displays media from the network API
+- Real-time search field for filtering
+- Pagination controls (50 items per page)
+- Action buttons for operations
+
+```java
+tableScrollPane.setBounds(580, 50, 950, 420);
+```
+
+PanelManagement.java:634
+
+<Note>
+The panel size is 1560 x 634 pixels total, designed for a wide-screen layout showing both local and network media simultaneously.
+</Note>
+
+## Media Table
+
+### Table Structure
+
+The table uses a custom `MediaTableModel` with four columns:
+
+| Column | Width | Content |
+|--------|-------|----------|
+| 0: Location | 10px | Icon indicating local/remote |
+| 1: Name | 300px | Media file name |
+| 2: URL | 300px | Source YouTube URL |
+| 3: NickName | 100px | User nickname |
+
+```java
+private void columnPrefs() {
+    var columnModel = tableFiles.getColumnModel();
+    columnModel.getColumn(0).setPreferredWidth(10);
+    columnModel.getColumn(1).setPreferredWidth(300);
+    columnModel.getColumn(2).setPreferredWidth(300);
+    columnModel.getColumn(3).setPreferredWidth(100);
+}
+```
+
+PanelManagement.java:513-528
+
+### Custom Rendering
+
+The table uses `MediaRowRenderer` for visual differentiation:
+
+```java
+MediaRowRenderer renderer = new MediaRowRenderer();
+for (int i = 0; i < tableFiles.getColumnCount(); i++) {
+    tableFiles.getColumnModel().getColumn(i).setCellRenderer(renderer);
+}
+```
+
+PanelManagement.java:486-490
+
+### Selection Mode
+
+```java
+tableFiles.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+tableFiles.setSelectionBackground(new java.awt.Color(153, 153, 153));
+tableFiles.setSelectionForeground(new java.awt.Color(255, 255, 255));
+```
+
+PanelManagement.java:628-630
+
+<Info>
+Only single row selection is allowed. Selected rows appear with gray background (RGB: 153, 153, 153) and white text.
+</Info>
+
+## Search and Filtering
+
+### Real-time Search
+
+The search field filters across multiple fields using a DocumentListener:
+
+```java
+textFieldFile.getDocument().addDocumentListener(new DocumentListener() {
+    @Override
+    public void insertUpdate(DocumentEvent e) {
+        applyTableFilter();
+    }
+    @Override
+    public void removeUpdate(DocumentEvent e) {
+        applyTableFilter();
+    }
+    @Override
+    public void changedUpdate(DocumentEvent e) {
+        applyTableFilter();
+    }
+});
+```
+
+PanelManagement.java:271-286
+
+### Filter Logic
+
+The filter searches across three fields:
+
+1. **File Name**: `media.mediaFileName`
+2. **Nickname**: Retrieved from user map
+3. **URL**: `media.downloadedFromUrl`
+
+```java
+for (Media media : fullMediaList) {
+    String fileName = (media.mediaFileName != null) ? 
+        media.mediaFileName.toLowerCase() : "";
+    String nickName = tableModel.getUserNames()
+        .getOrDefault(media.userId, "").toLowerCase();
+    String url = (media.downloadedFromUrl != null) ? 
+        media.downloadedFromUrl.toLowerCase() : "";
+    
+    if (fileName.contains(searchText) || 
+        nickName.contains(searchText) || 
+        url.contains(searchText)) {
+        filtered.add(media);
+    }
+}
+```
+
+PanelManagement.java:302-310
+
+<Tip>
+The search is case-insensitive and searches across the entire media list, not just the current page.
+</Tip>
+
+## Pagination
+
+### Configuration
+
+```java
+private int currentPage = 1;
+private final int pageSize = 50;
+```
+
+PanelManagement.java:84-85
+
+### Pagination Controls
+
+**Previous Button** (buttonPrev)
+- Icon: `backicon.png` (25x25)
+- Decrements current page
+- Disabled on page 1
+
+**Next Button** (buttonNext)
+- Icon: `fronticon.png` (25x25)
+- Increments current page
+- Disabled on last page
+
+**Page Status Label**
+- Format: "Page X of Y"
+- Updates dynamically with page changes
+
+```java
+private void updatePagination() {
+    int totalItems = fullMediaList.size();
+    double result = totalItems / pageSize;
+    int totalPages = (int) Math.ceil(result);
+    
+    labelPageStatus.setText("Page " + currentPage + " of " + totalPages);
+    buttonNext.setEnabled(currentPage < totalPages);
+    buttonPrev.setEnabled(currentPage > 1);
+    tableModel.updatePage(currentPage, pageSize);
+    
+    // Reset scroll to top
+    SwingUtilities.invokeLater(() -> {
+        tableScrollPane.getVerticalScrollBar().setValue(0);
+    });
+}
+```
+
+PanelManagement.java:530-551
+
+<Accordion title="Why Math.ceil()?">
+Using `Math.ceil()` ensures that any remaining items beyond a full page get their own page. For example, 105 items with pageSize=50 results in 3 pages (not 2.1).
+</Accordion>
+
+## Action Buttons
+
+All action buttons feature:
+- 40-50px dimensions
+- Custom icons from resources
+- Hover effects via `UIUtils.setHoverButton()`
+- Tooltips for accessibility
+- White background with no border
+
+### Refresh Table Button
+
+```java
+buttonRefreshTable.setIcon(utils.getFixedSizeIcon("refreshicon.png", 25, 25));
+buttonRefreshTable.setToolTipText("Refresh");
+```
+
+Action: Calls `refreshTableData(false)` to reload media from network and local sources.
+
+PanelManagement.java:807-809
+
+### Play/Open Button
+
+```java
+buttonOpenFile.setIcon(utils.getFixedSizeIcon("playvideoicon.png", 25, 25));
+buttonOpenFile.setToolTipText("Play");
+```
+
+Action: Opens selected media file in default application using `SwingWorker`:
+
+```java
+SwingWorker<Void, Void> openFileWorker = new SwingWorker<>() {
+    @Override
+    protected Void doInBackground() throws Exception {
+        managementService.openLocalFile(file);
+        return null;
+    }
+    
+    @Override
+    protected void done() {
+        try {
+            get();
+            utils.showFeedback(infoLabel, "Opening...", false);
+        } catch (InterruptedException | ExecutionException ex) {
+            utils.showFeedback(infoLabel, 
+                "This media is not downloaded.", true);
+        }
+    }
+};
+```
+
+PanelManagement.java:883-900
+
+### Upload Button
+
+```java
+buttonUploadFile.setIcon(utils.getFixedSizeIcon("uploadicon.png", 25, 25));
+buttonUploadFile.setToolTipText("Upload");
+```
+
+Action: Opens file chooser and prompts for YouTube URL:
+
+```java
+JFileChooser chooser = new JFileChooser();
+if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+    File selectedFile = chooser.getSelectedFile();
+    
+    String youtubeUrl = null;
+    while (true) {
+        youtubeUrl = JOptionPane.showInputDialog(this, 
+            "Enter the YouTube URL:");
+        if (youtubeUrl == null) break;
+        if (!youtubeUrl.trim().isEmpty()) break;
+        utils.showFeedback(infoLabel, "URL can't be empty.", true);
+    }
+    
+    if (youtubeUrl != null) {
+        managementService.uploadMedia(selectedFile, 
+            youtubeUrl.trim(), jframe.getComponent(), token);
+        Alerts.info(this, "File uploaded:\n" + 
+            selectedFile.getAbsolutePath());
+    }
+}
+```
+
+PanelManagement.java:849-875
+
+<Note>
+The upload process validates that the YouTube URL is not empty using an infinite loop that only breaks when user cancels or enters valid text.
+</Note>
+
+### Delete Button
+
+```java
+buttonDeleteFile.setIcon(utils.getFixedSizeIcon("deleteicon.png", 25, 25));
+buttonDeleteFile.setToolTipText("Delete");
+```
+
+Action: Deletes selected media and refreshes the local list:
+
+```java
+Media file = getSelectedMedia("Delete");
+if (file == null) return;
+
+try {
+    if (managementService.deleteMedia(file)) {
+        Alerts.info(this, "File deleted successfully.");
+        refreshLocalList();
+    } else {
+        utils.showFeedback(infoLabel, 
+            "You can't delete this media.", true);
+    }
+} catch (Exception ex) {
+    utils.showFeedback(infoLabel, 
+        "You can't delete this media.", true);
+}
+```
+
+PanelManagement.java:813-829
+
+### Download Button
+
+```java
+buttonDownloadFile.setIcon(utils.getFixedSizeIcon("downloadicon.png", 25, 25));
+buttonDownloadFile.setToolTipText("Download");
+```
+
+Action: Downloads selected network media to local directory:
+
+```java
+Media file = getSelectedMedia("Download");
+if (file == null) return;
+
+try {
+    managementService.downloadMedia(file, jframe.getComponent(), token);
+    Alerts.info(this, "File successfully downloaded to " + 
+        prefService.getOutputDir().toString());
+    refreshLocalList();
+} catch (Exception ex) {
+    utils.showFeedback(infoLabel, 
+        "This media is already downloaded.", true);
+}
+```
+
+PanelManagement.java:833-846
+
+<Info>
+All action buttons require a media selection. If nothing is selected, a feedback message "Please, select a File to [action]." is displayed.
+</Info>
+
+## Media Selection Helper
+
+```java
+private Media getSelectedMedia(String action) {
+    int selectedRow = tableFiles.getSelectedRow();
+    if (selectedRow < 0) {
+        utils.showFeedback(infoLabel, 
+            "Please, select a File to " + action + ".", true);
+        return null;
+    }
+    int modelRow = tableFiles.convertRowIndexToModel(selectedRow);
+    MediaTableModel model = (MediaTableModel) tableFiles.getModel();
+    Media file = model.getFile(modelRow);
+    return file;
+}
+```
+
+PanelManagement.java:499-511
+
+<Tip>
+The method converts view row index to model row index to handle sorting correctly. This ensures the right media is retrieved even when columns are sorted.
+</Tip>
+
+## Loading State Management
+
+The panel implements a sophisticated loading overlay system:
+
+### Freeze UI
+
+```java
+private void freezeUI() {
+    if (isLoadingOverlayVisible) return;
+    isLoadingOverlayVisible = true;
+    
+    SwingUtilities.invokeLater(() -> {
+        JRootPane rootPane = SwingUtilities.getRootPane(PanelManagement.this);
+        if (rootPane != null) {
+            rootPane.setGlassPane(loadingPanel);
+            loadingPanel.setVisible(true);
+            loadingPanel.requestFocusInWindow();
+        }
+        
+        Window window = SwingUtilities.getWindowAncestor(PanelManagement.this);
+        if (window != null) {
+            window.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        }
+    });
+}
+```
+
+PanelManagement.java:203-230
+
+### Loading Panel Features
+
+The loading panel blocks all user interaction:
+
+- **Opaque overlay** with wait cursor
+- **Mouse event consumption** (click, move, drag, scroll)
+- **Keyboard event blocking**
+- **Focus capturing**
+
+```java
+private void initLoadingPanel() {
+    loadingPanel = new JPanel();
+    loadingPanel.setOpaque(false);
+    loadingPanel.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+    
+    MouseAdapter blocker = new MouseAdapter() {
+        @Override
+        public void mousePressed(MouseEvent e) { e.consume(); }
+        @Override
+        public void mouseReleased(MouseEvent e) { e.consume(); }
+        // ... other mouse events
+    };
+    
+    loadingPanel.addMouseListener(blocker);
+    loadingPanel.addMouseMotionListener(blocker);
+    loadingPanel.addMouseWheelListener(e -> e.consume());
+    loadingPanel.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) { e.consume(); }
+    });
+}
+```
+
+PanelManagement.java:127-200
+
+## Real-time Synchronization
+
+The panel uses `MediaSyncPolling` for automatic updates:
+
+```java
+private void startPolling() {
+    MediaSyncPolling mediaSyncPolling = jframe.getComponent();
+    token = tokenService.getToken();
+    mediaSyncPolling.setToken(token);
+    mediaSyncPolling.setPollingInterval(5);
+    
+    if (!listenerAdded) {
+        mediaSyncPolling.addCustomEventListener(new CheckListMediaListener() {
+            @Override
+            public void checkListMediaReceived(CheckListMediaEvent evt) {
+                List<Media> newMedias = evt.getMediaList();
+                
+                if (initialLoadInProgress && !networkReady) {
+                    networkReady = true;
+                }
+                
+                if (newMedias != null && !newMedias.isEmpty()) {
+                    applyNetworkUpdateTable(newMedias);
+                }
+                
+                if (initialLoadInProgress) {
+                    checkSynchronization();
+                }
+            }
+        });
+        listenerAdded = true;
+    }
+    
+    mediaSyncPolling.setRunning(true);
+    mediaSyncPolling.setPollingInterval(60); // Change to 60s after initial load
+}
+```
+
+PanelManagement.java:380-417
+
+<Accordion title="Why two polling intervals?">
+The initial polling interval is 5 seconds for quick synchronization on startup. After the initial load completes, it changes to 60 seconds to reduce server load and prevent the app from becoming unresponsive with too frequent updates.
+</Accordion>
+
+## Initialization Workflow
+
+The panel loads data automatically when displayed:
+
+```java
+@Override
+public void addNotify() {
+    super.addNotify();
+    
+    if (!hasBeenInitialized) {
+        hasBeenInitialized = true;
+        initialLoad();
+    } else {
+        unfreezeUI();
+    }
+}
+
+private void initialLoad() {
+    Timer timer = new Timer(0, e -> {
+        initialLoadInProgress = true;
+        localReady = false;
+        networkReady = false;
+        
+        freezeUI();
+        refreshLocalList();
+        refreshTableData(true);
+        startPolling();
+    });
+    timer.setRepeats(false);
+    timer.start();
+}
+```
+
+PanelManagement.java:331-363
+
+<Info>
+Using a Timer with 0 delay ensures the panel paints before loading data, preventing UI freeze during initial load.
+</Info>
+
+## Local Files List
+
+### Filter Combo Box
+
+Options: "All", "Videos", "Audios"
+
+```java
+comboFilter.setModel(new javax.swing.DefaultComboBoxModel<>(
+    new String[] { "All", "Videos", "Audios" }));
+```
+
+PanelManagement.java:610
+
+### Refresh Local List
+
+```java
+private void refreshLocalList() {
+    try {
+        String selected = (String) comboFilter.getSelectedItem();
+        DefaultListModel<String> model = 
+            managementService.getUpdatedLocalListModel(selected);
+        listFiles.setModel(model);
+    } catch (IOException ex) {
+        Alerts.error(this, "Error: " + ex.getMessage());
+    }
+}
+```
+
+PanelManagement.java:366-377
+
+### List Styling
+
+```java
+listFiles.setSelectionBackground(new java.awt.Color(153, 153, 153));
+listFiles.setSelectionForeground(new java.awt.Color(255, 255, 255));
+listScrollPane.setHorizontalScrollBarPolicy(
+    javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+```
+
+PanelManagement.java:589-591, 98
+
+## Best Practices
+
+<Tip>
+When working with PanelManagement:
+- Always use `SwingWorker` for long-running operations to keep UI responsive
+- Call `refreshLocalList()` after upload/download/delete operations
+- Use the `freezeUI()`/`unfreezeUI()` pattern for operations that take time
+- Validate media selection before performing actions
+- Provide user feedback through the `infoLabel` for all operations
+</Tip>

@@ -1,0 +1,267 @@
+---
+title: Initial Setup
+description: Configure ViewTool for the first time, including directory structure and preferences
+---
+
+## Overview
+
+ViewTool requires initial configuration to set up download directories, locate external binaries, and configure download preferences. This guide walks you through the complete setup process.
+
+## Directory Structure
+
+ViewTool automatically creates a default directory structure on first launch:
+
+```
+ViewTool/
+├─ src/main/java/martin/viewtool/
+│   ├─ core/          → Business logic and services
+│   ├─ ui/            → Swing GUI components
+│   ├─ config/        → Configuration management
+│   └─ utils/         → Utility classes
+├─ resources/         → Application resources
+├─ yt-dlp.exe         → YouTube download binary
+└─ ViewToolDownloads/ → Default download location
+```
+
+### Default Download Directory
+
+The application automatically creates a downloads folder in your home directory:
+
+<CodeGroup>
+```java PreferencesService.java
+public Path getOutputDir() {
+    // Default path in user's home directory
+    Path defaultPath = Path.of(System.getProperty("user.home"), "ViewToolDownloads");
+    
+    Path path = Path.of(prefs.get(KEY_OUTPUT, defaultPath.toString()));
+
+    if (!java.nio.file.Files.exists(path)) {
+        try {
+            java.nio.file.Files.createDirectories(path);
+        } catch (Exception e) {
+            System.err.print("The output directory could not be created.: " + e.getMessage());
+        }
+    }
+    return path;
+}
+```
+
+```bash Windows
+C:\Users\YourUsername\ViewToolDownloads
+```
+
+```bash Linux/Mac
+/home/username/ViewToolDownloads
+```
+</CodeGroup>
+
+<Note>
+The directory is created automatically if it doesn't exist. If creation fails, an error message will be displayed in the console.
+</Note>
+
+## Accessing Preferences
+
+<Steps>
+  <Step title="Open Preferences Panel">
+    Navigate to **Edit > Preferences** from the menu bar. This replaces the main view with the preferences configuration panel.
+    
+    The preferences panel allows you to configure:
+    - Download output directory
+    - yt-dlp executable location
+    - Download speed limits
+    - Automatic `.m3u` playlist creation
+  </Step>
+
+  <Step title="Configure Settings">
+    All preferences are stored using Java's `Preferences` API under the node `martin.viewtool`:
+
+    ```java
+    private final Preferences prefs = Preferences.userRoot().node("martin.viewtool");
+    ```
+
+    Settings are persisted across application restarts.
+  </Step>
+</Steps>
+
+## Setting Output Directory
+
+Change where downloaded files are saved:
+
+<Steps>
+  <Step title="Click Select Folder Button">
+    In the Preferences panel, click the folder icon next to "Select Folder:"
+  </Step>
+
+  <Step title="Choose Directory">
+    A file chooser dialog opens. Navigate to and select your desired download location.
+
+    ```java
+    private void buttonDirectoryActionPerformed(java.awt.event.ActionEvent evt) {
+        int result = fileChooserDirDown.showOpenDialog(this);
+        if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+            File selectedDir = fileChooserDirDown.getSelectedFile();
+            prefService.setOutputDir(selectedDir.toPath());
+            JOptionPane.showMessageDialog(this,
+                "Selected directory:\n" + selectedDir.getAbsolutePath(),
+                "Download folder", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Confirm Selection">
+    A confirmation dialog displays the selected path. The setting is saved immediately.
+  </Step>
+</Steps>
+
+<Note>
+The application will create subdirectories if they don't exist when downloading files.
+</Note>
+
+## Download Speed Limit
+
+Control bandwidth usage during downloads:
+
+<Steps>
+  <Step title="Enter Speed Limit">
+    In the "Speed" text field, enter a numeric value in MB/s:
+
+    ```java
+    textFieldLimDown.setText(prefService.getLimitSpeed());
+    labelLimDown.setText("Speed: (Current: "+ prefService.getLimitSpeed()+"MB)");
+    ```
+  </Step>
+
+  <Step title="Save Configuration">
+    Click the save icon to apply the speed limit:
+
+    ```java
+    private void buttonLimitDownloadActionPerformed(java.awt.event.ActionEvent evt) {
+        String speed = textFieldLimDown.getText();
+        try {
+            ValidationService.requireValidLimit(speed);
+            prefService.setLimitSpeed(speed);
+            textFieldLimDown.setText(prefService.getLimitSpeed());
+            labelLimDown.setText("Speed: (Current: "+ prefService.getLimitSpeed()+"MB)");
+        } catch (Exception ex) {
+            utils.showFeedback(infoLabel,"Only integer number.", true);
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+<Note>
+Set the value to `0` for no speed limit. Only integer values are accepted.
+</Note>
+
+## Playlist Configuration
+
+Enable automatic `.m3u` playlist file creation for downloaded content:
+
+```java
+public boolean isM3USelected() {
+    return checkBoxM3u.isSelected();
+}
+```
+
+<Steps>
+  <Step title="Enable M3U Creation">
+    Check the "Create a .m3u for playlist" checkbox in the Preferences panel.
+  </Step>
+
+  <Step title="How It Works">
+    When enabled, yt-dlp will automatically create a `playlist.m3u` file in your output directory containing all downloaded media paths:
+
+    ```java
+    if (req.m3uFile()) {
+        commands.add("--print-to-file");
+        commands.add("after_move:%(filepath)s");
+        commands.add(req.outputDir().resolve("playlist.m3u").toString());
+    }
+    ```
+  </Step>
+</Steps>
+
+<Note>
+This feature is useful when downloading YouTube playlists, as it creates a media player-compatible playlist file.
+</Note>
+
+## Preferences Storage
+
+All preferences are stored persistently using Java's Preferences API:
+
+<CodeGroup>
+```java Preference Keys
+private static final String KEY_YTDLP = "ytdlp.path";
+private static final String KEY_OUTPUT = "output.dir";
+private static final String KEY_LIMIT_RATE = "limit_rate";
+```
+
+```java Getters and Setters
+// Set preferences
+public void setYtDlpPath(Path p) {
+    prefs.put(KEY_YTDLP, p.toString());
+}
+
+public void setOutputDir(Path p) {
+    prefs.put(KEY_OUTPUT, p.toString());
+}
+
+public void setLimitSpeed(String raw) {
+    prefs.put(KEY_LIMIT_RATE, raw != null ? raw : "");
+}
+
+// Get preferences with defaults
+public Path getYtDlpPath() {
+    return Path.of(prefs.get(KEY_YTDLP, "yt-dlp"));
+}
+
+public String getLimitSpeed() {
+    return prefs.get(KEY_LIMIT_RATE, "");
+}
+```
+</CodeGroup>
+
+## Technical Requirements
+
+Before using ViewTool, ensure your system meets these requirements:
+
+<Warning>
+**System Requirements**
+- Java 17 or later
+- Windows OS (tested on Windows 10)
+- `yt-dlp.exe` accessible in system PATH or configured in preferences
+- `ffmpeg.exe` accessible for audio conversion (MP3 format)
+</Warning>
+
+## Next Steps
+
+After completing the initial setup:
+
+1. [Configure yt-dlp](/configuration/yt-dlp) - Set up the YouTube download binary
+2. [Install FFmpeg](/configuration/ffmpeg) - Enable audio format conversion
+3. Start downloading content from the main panel
+
+## Troubleshooting
+
+### Directory Creation Fails
+
+If the output directory cannot be created:
+- Verify you have write permissions to the target location
+- Check that the path doesn't contain invalid characters
+- Ensure sufficient disk space is available
+
+### Preferences Not Saving
+
+If settings reset after restarting:
+- Check Java has permission to write to the registry (Windows) or preferences file (Linux/Mac)
+- Run the application with appropriate user permissions
+- Verify the `martin.viewtool` preferences node is accessible
+
+### Speed Limit Validation Error
+
+If you see "Only integer number" error:
+- Enter only numeric values (e.g., `5`, `10`, `100`)
+- Do not include units (MB, KB, etc.)
+- Use `0` to disable speed limiting

@@ -1,0 +1,240 @@
+---
+title: Downloading Content
+description: Learn how to download YouTube videos and audio using ViewTool's built-in yt-dlp integration
+---
+
+## Overview
+
+ViewTool provides a streamlined interface for downloading YouTube content using yt-dlp. You can download videos in MP4 format or extract audio in MP3 format, with options for quality control and download speed limiting.
+
+## Download Process
+
+<Steps>
+  <Step title="Enter YouTube URL">
+    Paste the YouTube video URL into the URL text field in the main panel.
+
+    The URL is validated using the `ValidationService` before processing:
+
+    ```java
+    controller.validateUrl(textFieldURL.getText());
+    ```
+  </Step>
+
+  <Step title="Select Format">
+    Choose your preferred output format:
+    - **MP3**: Audio-only extraction with best quality
+    - **MP4**: Video with audio in MP4 container
+
+    The format selection is handled by radio buttons grouped together:
+
+    ```java
+    ButtonGroup formatGroup = new ButtonGroup();
+    formatGroup.add(buttonMP3);
+    formatGroup.add(buttonMP4);
+    buttonMP4.setSelected(true); // MP4 is default
+    ```
+  </Step>
+
+  <Step title="Configure Audio Options">
+    Use the "Only Audio" checkbox to extract audio from MP4 videos without re-encoding:
+
+    ```java
+    if (req.audioOnly() && req.format() == MediaFormat.MP4) {
+        commands.add("-x");
+        commands.add("--audio-format");
+        commands.add("m4a");
+    }
+    ```
+  </Step>
+
+  <Step title="Start Download">
+    Click the "Download" button to begin. The application will:
+    1. Validate the URL and speed limit settings
+    2. Display a progress dialog
+    3. Execute yt-dlp with the configured parameters
+    4. Update the progress bar in real-time
+  </Step>
+</Steps>
+
+## Format Configuration
+
+### MP3 Downloads
+
+When MP3 format is selected, ViewTool extracts audio at the highest quality:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+case MP3 -> {
+    commands.add("-x");                // Extract audio
+    commands.add("--audio-format");
+    commands.add("mp3");
+    commands.add("--audio-quality");
+    commands.add("0");                 // Best quality
+}
+```
+
+### MP4 Downloads
+
+MP4 format downloads the best available video and audio streams:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+case MP4 -> {
+    commands.add("-f");
+    commands.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4");
+}
+```
+
+<Note>
+The format selector ensures the highest quality MP4 video is downloaded by preferring native MP4 streams.
+</Note>
+
+## Progress Tracking
+
+ViewTool displays real-time download progress using a JProgressBar that updates based on yt-dlp's output:
+
+```java:src/main/java/martin/viewtool/ui/PanelMain.java
+@Override
+protected Integer doInBackground() throws Exception {
+    return controller.startDownload(
+        textFieldURL.getText(),
+        buttonMP3.isSelected() ? MediaFormat.MP3 : MediaFormat.MP4,
+        checkBoxOnlyAudio.isSelected(),
+        prefService.getOutputDir(),
+        log,
+        pct -> publish(pct),  // Progress consumer
+        limit,
+        preferences.isM3USelected()
+    );
+}
+
+@Override
+protected void process(java.util.List<Integer> chunks) {
+    int last = chunks.get(chunks.size() - 1);
+    if (!seenAnyPercent) {
+        progressBar.setIndeterminate(false);
+        seenAnyPercent = true;
+    }
+    progressBar.setValue(last);
+}
+```
+
+The `ProcessRunner` parses yt-dlp's percentage output:
+
+```java:src/main/java/martin/viewtool/core/io/ProcessRunner.java
+if (onPercent != null) {
+    String t = line.trim();
+    if (t.endsWith("%") && t.length() <= 8) {
+        parseAndSendPercent(t.substring(0, t.length() - 1).trim(), onPercent);
+    }
+}
+```
+
+## Download Request Structure
+
+Downloads are encapsulated in a `DownloadRequest` record:
+
+```java:src/main/java/martin/viewtool/core/DownloadRequest.java
+public record DownloadRequest(
+    URI url,
+    MediaFormat format,
+    boolean audioOnly,
+    Path outputDir,
+    String limit,
+    boolean m3uFile
+) {}
+```
+
+<Accordion title="Download Request Parameters">
+  - **url**: Validated YouTube URL
+  - **format**: MP3 or MP4
+  - **audioOnly**: Extract audio from video
+  - **outputDir**: Destination directory from preferences
+  - **limit**: Download speed limit in MB/s
+  - **m3uFile**: Create playlist file for batch downloads
+</Accordion>
+
+## Output File Naming
+
+Downloaded files are automatically named using the video title:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+commands.add("-o");
+commands.add("%(title)s.%(ext)s");
+```
+
+This yt-dlp template ensures files are saved with descriptive names based on the video metadata.
+
+## Speed Limiting
+
+Configure download speed limits in the preferences panel to avoid bandwidth saturation:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+if (req.limit() != null) {
+    commands.add("--limit-rate");
+    commands.add(req.limit());
+}
+```
+
+<Warning>
+Speed limits are specified in megabytes per second (MB/s). Set to "0" for unlimited speed.
+</Warning>
+
+## Playlist Support
+
+Enable M3U playlist creation for batch downloads:
+
+```java:src/main/java/martin/viewtool/core/YtDlpService.java
+if (req.m3uFile()) {
+    commands.add("--print-to-file");
+    commands.add("after_move:%(filepath)s");
+    commands.add(req.outputDir().resolve("playlist.m3u").toString());
+}
+```
+
+This creates a `playlist.m3u` file in your download directory containing all downloaded media file paths.
+
+## Error Handling
+
+The download process includes comprehensive error handling:
+
+```java:src/main/java/martin/viewtool/ui/PanelMain.java
+@Override
+protected void done() {
+    buttonDownload.setEnabled(true);
+    try {
+        int exit = get();
+        if (exit == 0) {
+            Alerts.info(PanelMain.this, "Download complete to " + 
+                prefService.getOutputDir().toString());
+            progressBar.setValue(0);
+        } else {
+            utils.showFeedback(infoLabel, 
+                "Downloaded uncompleted. Try again.", true);
+        }
+    } catch (Exception ex) {
+        utils.showFeedback(infoLabel, "Invalid URL.", true);
+    }
+}
+```
+
+<Note>
+The download button is disabled during active downloads to prevent multiple concurrent downloads.
+</Note>
+
+## Quick Play Feature
+
+After downloading, use the "Play last video" button to immediately open your most recent download:
+
+```java:src/main/java/martin/viewtool/ui/PanelMain.java
+private void handlePlayVideo() {
+    SwingWorker<Void, Void> openFileWorker = new SwingWorker<>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            playService.playLastDownloaded(prefService.getOutputDir());
+            return null;
+        }
+    };
+    openFileWorker.execute();
+}
+```
+
+This feature uses your system's default media player to open the file.

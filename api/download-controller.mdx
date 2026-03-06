@@ -1,0 +1,299 @@
+---
+title: 'DownloadController'
+description: 'Controller for validating and orchestrating media downloads'
+---
+
+## Overview
+
+The `DownloadController` class acts as a facade for the download workflow, providing input validation and coordinating between validation services and the yt-dlp download service.
+
+**Package:** `martin.viewtool.core`
+
+## Constructor
+
+```java
+public DownloadController(YtDlpService service)
+```
+
+<ParamField path="service" type="YtDlpService" required>
+  Instance of YtDlpService for executing downloads
+</ParamField>
+
+### Example
+
+```java
+Path ytDlpPath = Path.of("/usr/local/bin/yt-dlp");
+YtDlpService ytDlpService = new YtDlpService(ytDlpPath);
+DownloadController controller = new DownloadController(ytDlpService);
+```
+
+## Methods
+
+### validateUrl()
+
+Validates a URL string without performing any download.
+
+```java
+public void validateUrl(String raw)
+```
+
+<ParamField path="raw" type="String" required>
+  Raw URL string to validate
+</ParamField>
+
+**Throws:** `IllegalArgumentException` if URL is invalid (missing scheme, host, or malformed)
+
+### Validation Rules
+
+- URL must have a valid scheme (http, https, etc.)
+- URL must have a valid host
+- String is trimmed before validation
+
+### Code Example
+
+```java
+DownloadController controller = new DownloadController(ytDlpService);
+
+try {
+    controller.validateUrl("https://www.youtube.com/watch?v=abc123");
+    System.out.println("URL is valid");
+} catch (IllegalArgumentException e) {
+    System.err.println("Invalid URL: " + e.getMessage());
+}
+```
+
+### validateSpeed()
+
+Validates a download speed limit string.
+
+```java
+public void validateSpeed(String speed)
+```
+
+<ParamField path="speed" type="String" required>
+  Speed limit as numeric string (e.g., "5" for 5 MB/s)
+</ParamField>
+
+**Throws:** `IllegalArgumentException` if speed format is invalid
+
+### Validation Rules
+
+- Must be a numeric string (digits only)
+- Empty string or "0" is valid (no limit)
+- Null is valid (no limit)
+- Non-numeric values throw exception
+
+### Code Example
+
+<CodeGroup>
+
+```java Valid Speed
+try {
+    controller.validateSpeed("10");  // OK: 10 MB/s
+    controller.validateSpeed("0");   // OK: no limit
+    controller.validateSpeed("");    // OK: no limit
+    controller.validateSpeed(null);  // OK: no limit
+} catch (IllegalArgumentException e) {
+    // Won't reach here
+}
+```
+
+```java Invalid Speed
+try {
+    controller.validateSpeed("10MB");  // Invalid: not numeric
+    controller.validateSpeed("fast"); // Invalid: not numeric
+} catch (IllegalArgumentException e) {
+    System.err.println(e.getMessage());
+    // "invalid speed. Please, write only digits number example: 1 , 20 , 30 ."
+}
+```
+
+</CodeGroup>
+
+### startDownload()
+
+Validates inputs and initiates a media download.
+
+```java
+public int startDownload(
+    String rawUrl,
+    MediaFormat format,
+    boolean onlyAudio,
+    Path outputDir,
+    Appendable out,
+    IntConsumer onPercent,
+    String rawLimit,
+    boolean m3uFile
+) throws Exception
+```
+
+<ParamField path="rawUrl" type="String" required>
+  URL of the media to download
+</ParamField>
+
+<ParamField path="format" type="MediaFormat" required>
+  Target format: `MediaFormat.MP3` or `MediaFormat.MP4`
+</ParamField>
+
+<ParamField path="onlyAudio" type="boolean" required>
+  If true, extracts only audio track
+</ParamField>
+
+<ParamField path="outputDir" type="Path" required>
+  Directory where downloaded file will be saved
+</ParamField>
+
+<ParamField path="out" type="Appendable" required>
+  Output stream for download logs
+</ParamField>
+
+<ParamField path="onPercent" type="IntConsumer" required>
+  Callback invoked with progress percentage
+</ParamField>
+
+<ParamField path="rawLimit" type="String">
+  Download speed limit (numeric string, e.g., "5")
+</ParamField>
+
+<ParamField path="m3uFile" type="boolean" required>
+  If true, generates M3U playlist file
+</ParamField>
+
+<ResponseField name="exitCode" type="int">
+  Process exit code: 0 for success, non-zero for failure
+</ResponseField>
+
+### Workflow
+
+1. Validates URL format using `ValidationService.requireValidUrl()`
+2. Validates speed limit using `ValidationService.requireValidLimit()`
+3. Constructs `DownloadRequest` object
+4. Delegates to `YtDlpService.download()`
+
+### Code Example
+
+<CodeGroup>
+
+```java Basic Download
+DownloadController controller = new DownloadController(ytDlpService);
+Path outputPath = Path.of("/home/user/downloads");
+StringBuilder log = new StringBuilder();
+
+try {
+    int exitCode = controller.startDownload(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        MediaFormat.MP3,
+        false,
+        outputPath,
+        log,
+        percent -> System.out.println(percent + "%"),
+        null,  // No speed limit
+        false  // No M3U file
+    );
+    
+    if (exitCode == 0) {
+        System.out.println("Download successful!");
+    } else {
+        System.err.println("Download failed with code: " + exitCode);
+    }
+} catch (IllegalArgumentException e) {
+    System.err.println("Validation error: " + e.getMessage());
+} catch (Exception e) {
+    System.err.println("Download error: " + e.getMessage());
+}
+```
+
+```java With Speed Limit
+int exitCode = controller.startDownload(
+    "https://example.com/video",
+    MediaFormat.MP4,
+    false,
+    Path.of("/downloads"),
+    new StringBuilder(),
+    progress -> progressBar.setValue(progress),
+    "10",  // Limit to 10 MB/s
+    false
+);
+```
+
+```java Audio Only with Playlist
+int exitCode = controller.startDownload(
+    "https://example.com/playlist",
+    MediaFormat.MP4,
+    true,   // Extract audio only
+    Path.of("/music"),
+    System.out,
+    System.out::println,
+    "5",    // 5 MB/s limit
+    true    // Generate playlist.m3u
+);
+```
+
+```java Swing Integration
+private void downloadButtonClicked() {
+    String url = urlTextField.getText();
+    MediaFormat format = formatComboBox.getSelectedItem();
+    String speedLimit = speedField.getText();
+    
+    SwingWorker<Integer, Void> worker = new SwingWorker<>() {
+        @Override
+        protected Integer doInBackground() throws Exception {
+            return controller.startDownload(
+                url,
+                format,
+                audioOnlyCheckBox.isSelected(),
+                Path.of(outputDirField.getText()),
+                logTextArea,
+                progress -> {
+                    SwingUtilities.invokeLater(() -> 
+                        progressBar.setValue(progress)
+                    );
+                },
+                speedLimit,
+                false
+            );
+        }
+        
+        @Override
+        protected void done() {
+            try {
+                int exitCode = get();
+                if (exitCode == 0) {
+                    JOptionPane.showMessageDialog(null, "Download complete!");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, 
+                    "Error: " + e.getMessage(), 
+                    "Download Failed", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    };
+    
+    worker.execute();
+}
+```
+
+</CodeGroup>
+
+## Exceptions
+
+- **IllegalArgumentException**: Thrown for invalid URL or speed limit format
+- **IOException**: Thrown if download process fails
+- **InterruptedException**: Thrown if download is interrupted
+- **Exception**: Generic exception for other download errors
+
+## Related Classes
+
+- `YtDlpService`: Executes the actual download
+- `ValidationService`: Provides validation logic
+- `DownloadRequest`: Request object created from validated parameters
+- `MediaFormat`: Enum defining MP3 and MP4 formats
+
+## Best Practices
+
+1. **Always validate before download**: Use `validateUrl()` and `validateSpeed()` for early feedback
+2. **Handle exceptions**: Catch and display validation errors to users
+3. **Use SwingWorker**: Execute downloads on background threads in Swing applications
+4. **Provide progress feedback**: Implement meaningful progress callbacks
+5. **Log output**: Capture download logs for debugging

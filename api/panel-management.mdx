@@ -1,0 +1,769 @@
+---
+title: "PanelManagement"
+description: "Media library management panel with local file list, network media table, and file operations (upload, download, delete, play)"
+---
+
+## Overview
+
+The `PanelManagement` class extends `JPanel` and provides a comprehensive interface for managing both local downloaded media files and network-based media library. It features a local file list, a paginated network media table, search functionality, and media operations.
+
+<Note>
+This is the most complex UI component in ViewTool, featuring pagination, live search, background polling, dual data sources (local + network), and a sophisticated loading overlay system.
+</Note>
+
+## Class Structure
+
+### Package
+```java
+package martin.viewtool.ui;
+```
+
+### Inheritance
+```java
+public class PanelManagement extends javax.swing.JPanel
+```
+
+## UI Components
+
+### Local Files Section (Left Side)
+
+<ParamField path="listFiles" type="JList<String>">
+  List displaying locally downloaded media files
+</ParamField>
+
+<ParamField path="listScrollPane" type="JScrollPane">
+  Scroll pane containing the file list (550x420 pixels)
+</ParamField>
+
+<ParamField path="comboFilter" type="JComboBox<String>">
+  Filter dropdown with options: "All", "Videos", "Audios"
+</ParamField>
+
+<ParamField path="buttonRefreshList" type="JButton">
+  Refresh button (with refresh icon) to reload the local file list
+</ParamField>
+
+<ParamField path="titleListLabel" type="JLabel">
+  Section title: "Media downloaded:" with library icon
+</ParamField>
+
+### Network Media Table (Right Side)
+
+<ParamField path="tableFiles" type="JTable">
+  Table displaying network media library with columns: Location, Name, URL, NickName
+</ParamField>
+
+<ParamField path="tableScrollPane" type="JScrollPane">
+  Scroll pane containing the media table (950x420 pixels)
+</ParamField>
+
+<ParamField path="tableModel" type="MediaTableModel">
+  Custom table model managing media data and pagination
+</ParamField>
+
+<ParamField path="tableSorter" type="TableRowSorter<MediaTableModel>">
+  Sorter for enabling column sorting and filtering
+</ParamField>
+
+<ParamField path="textFieldFile" type="JTextField">
+  Search field for live filtering of media table (380 pixels wide)
+</ParamField>
+
+<ParamField path="labelSearchFile" type="JLabel">
+  Search icon displayed next to search field
+</ParamField>
+
+<ParamField path="titleTableLabel" type="JLabel">
+  Section title: "Media network library:" with database icon
+</ParamField>
+
+### Action Buttons
+
+<ParamField path="buttonRefreshTable" type="JButton">
+  Refresh button to reload network media data
+</ParamField>
+
+<ParamField path="buttonOpenFile" type="JButton">
+  Play button to open selected media file locally
+</ParamField>
+
+<ParamField path="buttonUploadFile" type="JButton">
+  Upload button to upload a local file to the network library
+</ParamField>
+
+<ParamField path="buttonDeleteFile" type="JButton">
+  Delete button to remove selected media from network and local storage
+</ParamField>
+
+<ParamField path="buttonDownloadFile" type="JButton">
+  Download button to download selected network media to local directory
+</ParamField>
+
+### Pagination Controls
+
+<ParamField path="buttonPrev" type="JButton">
+  Previous page button (back icon)
+</ParamField>
+
+<ParamField path="buttonNext" type="JButton">
+  Next page button (front icon)
+</ParamField>
+
+<ParamField path="labelPageStatus" type="JLabel">
+  Displays current page status (e.g., "Page 1 of 5")
+</ParamField>
+
+<ParamField path="currentPage" type="int" default="1">
+  Current page number in pagination
+</ParamField>
+
+<ParamField path="pageSize" type="int" default="50">
+  Number of items per page
+</ParamField>
+
+### Status Display
+
+<ParamField path="infoLabel" type="JLabel">
+  Label for displaying operation feedback and error messages
+</ParamField>
+
+## Services and Dependencies
+
+<ParamField path="prefService" type="PreferencesService">
+  Service for accessing user preferences (output directory, etc.)
+</ParamField>
+
+<ParamField path="libraryService" type="LibraryService">
+  Service for managing local file system operations
+</ParamField>
+
+<ParamField path="mediaService" type="MediaService">
+  Service for managing network media data and combining local/network sources
+</ParamField>
+
+<ParamField path="managementService" type="ManagementService">
+  High-level service coordinating library, media, and preference services
+</ParamField>
+
+<ParamField path="tokenService" type="TokenService">
+  Service for managing authentication tokens
+</ParamField>
+
+<ParamField path="utils" type="UIUtils">
+  Utility class for UI operations, icons, and feedback
+</ParamField>
+
+<ParamField path="jframe" type="ViewToolApp">
+  Reference to parent frame for accessing MediaSyncPolling component
+</ParamField>
+
+## State Management
+
+### Data State
+
+<ParamField path="fullMediaList" type="List<Media>">
+  Complete list of media items (both local and network)
+</ParamField>
+
+<ParamField path="token" type="String">
+  Authentication token for API requests
+</ParamField>
+
+### UI State
+
+<ParamField path="isLiveSearchActive" type="boolean">
+  Whether live search listener has been attached
+</ParamField>
+
+<ParamField path="hasBeenInitialized" type="boolean">
+  Whether the panel has completed initial data load
+</ParamField>
+
+<ParamField path="isLoadingOverlayVisible" type="volatile boolean">
+  Whether the loading overlay is currently displayed
+</ParamField>
+
+<ParamField path="localReady" type="volatile boolean">
+  Whether local data has finished loading
+</ParamField>
+
+<ParamField path="networkReady" type="volatile boolean">
+  Whether network data has finished loading
+</ParamField>
+
+<ParamField path="initialLoadInProgress" type="volatile boolean">
+  Whether initial data load is in progress
+</ParamField>
+
+### Background Workers
+
+<ParamField path="rebuildWorker" type="SwingWorker<List<Media>, Void>">
+  Background worker for rebuilding the media table
+</ParamField>
+
+## Constructor
+
+### PanelManagement(ViewToolApp jframe)
+
+```java
+public PanelManagement(ViewToolApp jframe)
+```
+
+**Parameters:**
+- `jframe` (ViewToolApp): Reference to parent frame
+
+Initializes the management panel:
+1. Stores reference to parent frame
+2. Gets TokenService from parent
+3. Retrieves authentication token
+4. Initializes UI components
+5. Sets up icons with hover effects
+6. Initializes loading panel overlay
+7. Configures tooltip dismissal delay (3 seconds)
+8. Disables horizontal scrollbar on file list
+9. Attaches filter combo listener
+10. Activates live search on table
+
+<CodeGroup>
+```java Example
+ViewToolApp mainFrame = new ViewToolApp();
+PanelManagement mgmtPanel = new PanelManagement(mainFrame);
+```
+</CodeGroup>
+
+## Initialization Methods
+
+### agrupedIcon()
+
+```java
+private void agrupedIcon()
+```
+
+Loads and applies all icons at 25x25 or 40x40 pixels, and attaches hover effects to all buttons:
+
+```java
+buttonRefreshList.setIcon(utils.getFixedSizeIcon("refreshicon.png", 25, 25));
+buttonDeleteFile.setIcon(utils.getFixedSizeIcon("deleteicon.png", 25, 25));
+titleListLabel.setIcon(utils.getFixedSizeIcon("libraryicon.png", 40, 40));
+// ... etc
+utils.setHoverButton(buttonRefreshList);
+```
+
+### initLoadingPanel()
+
+```java
+private void initLoadingPanel()
+```
+
+Creates an opaque loading overlay panel that:
+- Shows wait cursor
+- Consumes all mouse events (clicks, moves, wheel)
+- Consumes all keyboard events
+- Prevents user interaction while data loads
+
+<Note>
+This loading panel is used as a glass pane to block all user input during initial data loading.
+</Note>
+
+## Loading Overlay System
+
+### freezeUI()
+
+```java
+private void freezeUI()
+```
+
+Displays the loading overlay:
+1. Sets `isLoadingOverlayVisible` to true
+2. Gets root pane from component hierarchy
+3. Sets loading panel as glass pane
+4. Makes loading panel visible
+5. Requests focus for loading panel
+6. Changes window cursor to wait cursor
+
+<CodeGroup>
+```java Blocking UI
+freezeUI();
+// Perform long-running operation
+unfreezeUI();
+```
+</CodeGroup>
+
+### unfreezeUI()
+
+```java
+private void unfreezeUI()
+```
+
+Removes the loading overlay:
+1. Sets `isLoadingOverlayVisible` to false
+2. Restores default cursor
+3. Hides loading panel
+
+### checkSynchronization()
+
+```java
+private void checkSynchronization()
+```
+
+Called when local or network data finishes loading. If both `localReady` and `networkReady` are true:
+1. Sets `initialLoadInProgress` to false
+2. Calls `unfreezeUI()` to restore user interaction
+
+<Note>
+This dual-source synchronization ensures the UI remains frozen until both local files and network media are loaded.
+</Note>
+
+## Lifecycle Methods
+
+### addNotify()
+
+```java
+@Override
+public void addNotify()
+```
+
+Overridden to trigger automatic data loading when panel becomes visible:
+- On first display: Calls `initialLoad()`
+- On subsequent displays: Calls `unfreezeUI()`
+
+### initialLoad()
+
+```java
+private void initialLoad()
+```
+
+Uses a `Timer` with 0 delay to load data after panel is painted:
+1. Sets initial load flags
+2. Freezes UI
+3. Refreshes local file list
+4. Refreshes table data
+5. Starts polling for network updates
+
+<CodeGroup>
+```java Load Sequence
+Timer timer = new Timer(0, new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        initialLoadInProgress = true;
+        localReady = false;
+        networkReady = false;
+        freezeUI();
+        refreshLocalList();
+        refreshTableData(true);
+        startPolling();
+    }
+});
+timer.setRepeats(false);
+timer.start();
+```
+</CodeGroup>
+
+## Local File Management
+
+### refreshLocalList()
+
+```java
+private void refreshLocalList()
+```
+
+Updates the local file list based on current filter selection:
+1. Gets selected filter (All/Videos/Audios)
+2. Calls `managementService.getUpdatedLocalListModel()`
+3. Updates JList model
+
+<CodeGroup>
+```java Filter Options
+String selected = (String) comboFilter.getSelectedItem();
+// "All" - shows all files
+// "Videos" - shows only .mp4, .avi, etc.
+// "Audios" - shows only .mp3, .wav, etc.
+```
+</CodeGroup>
+
+### comboFilterListener()
+
+```java
+public final void comboFilterListener()
+```
+
+Attaches action listener to filter combo box. When selection changes, calls `refreshLocalList()`.
+
+## Network Media Management
+
+### startPolling()
+
+```java
+private void startPolling()
+```
+
+Activates the MediaSyncPolling component to periodically check for new network media:
+1. Gets MediaSyncPolling from parent frame
+2. Sets authentication token
+3. Sets initial polling interval to 5 seconds
+4. Attaches custom event listener (only once)
+5. Starts polling
+6. Changes interval to 60 seconds after first load
+
+<CodeGroup>
+```java Polling Configuration
+MediaSyncPolling mediaSyncPolling = jframe.getComponent();
+mediaSyncPolling.setToken(token);
+mediaSyncPolling.setPollingInterval(5); // Initial
+mediaSyncPolling.setRunning(true);
+mediaSyncPolling.setPollingInterval(60); // Ongoing
+```
+</CodeGroup>
+
+**Event Listener:**
+When `CheckListMediaEvent` is received:
+1. Extracts new media list
+2. Sets `networkReady` to true on initial load
+3. Calls `applyNetworkUpdateTable()` to update table
+4. Checks synchronization
+
+### applyNetworkUpdateTable()
+
+```java
+private void applyNetworkUpdateTable(final List<Media> newMedia)
+```
+
+**Parameters:**
+- `newMedia` (List\<Media\>): New media items from network
+
+Uses a `Timer` with 0 delay to:
+1. Add new media to MediaService via `addNewMediaNetwork()`
+2. Refresh table data
+
+### refreshTableData()
+
+```java
+private void refreshTableData(boolean isInitialLoad)
+```
+
+**Parameters:**
+- `isInitialLoad` (boolean): Whether this is the initial data load
+
+Refreshes the media table in background:
+1. Cancels any existing rebuild worker
+2. Freezes UI if initial load
+3. Creates new SwingWorker
+4. Background: Calls `mediaService.createMediaListCombined()`
+5. Done: Updates `fullMediaList` and applies to table model
+6. Sets `localReady` and checks synchronization
+
+<CodeGroup>
+```java Background Rebuild
+rebuildWorker = new SwingWorker<>() {
+    @Override
+    protected List<Media> doInBackground() {
+        return mediaService.createMediaListCombined();
+    }
+
+    @Override
+    protected void done() {
+        if (isCancelled()) return;
+        fullMediaList = get();
+        applyMediaTableModel(fullMediaList);
+        if (isInitialLoad) {
+            localReady = true;
+            checkSynchronization();
+        }
+    }
+};
+rebuildWorker.execute();
+```
+</CodeGroup>
+
+### applyMediaTableModel()
+
+```java
+private void applyMediaTableModel(List<Media> mediaListCombined)
+```
+
+**Parameters:**
+- `mediaListCombined` (List\<Media\>): Combined local and network media
+
+Initializes or updates the table model:
+- **First time**: Creates MediaTableModel, sets row sorter, applies custom renderer, configures column widths
+- **Subsequent times**: Updates existing model with new data
+
+Finally calls `applyTableFilter()` to apply any active search filter.
+
+### columnPrefs()
+
+```java
+private void columnPrefs()
+```
+
+Sets preferred column widths:
+- **Column 0 (Location)**: 10 pixels
+- **Column 1 (Name)**: 300 pixels
+- **Column 2 (URL)**: 300 pixels
+- **Column 3 (NickName)**: 100 pixels
+
+## Search and Filtering
+
+### LiveSearchOnTable()
+
+```java
+private void LiveSearchOnTable()
+```
+
+Attaches a `DocumentListener` to the search text field for real-time filtering:
+- Listens to: `insertUpdate`, `removeUpdate`, `changedUpdate`
+- Calls `applyTableFilter()` on any text change
+- Sets `isLiveSearchActive` flag to prevent duplicate listeners
+
+<Note>
+Search is applied as the user types, providing instant feedback without requiring a search button.
+</Note>
+
+### applyTableFilter()
+
+```java
+private void applyTableFilter()
+```
+
+Filters the media table based on search text:
+1. Gets search text from text field (lowercase)
+2. If empty: Displays full media list
+3. If not empty: Filters by matching filename, nickname, or URL
+4. Updates table model with filtered list
+5. Resets to page 1
+6. Updates pagination controls
+
+<CodeGroup>
+```java Filter Logic
+for (Media media : fullMediaList) {
+    String fileName = (media.mediaFileName != null) ? media.mediaFileName.toLowerCase() : "";
+    String nickName = tableModel.getUserNames().getOrDefault(media.userId, "").toLowerCase();
+    String url = (media.downloadedFromUrl != null) ? media.downloadedFromUrl.toLowerCase() : "";
+
+    if (fileName.contains(searchText) || nickName.contains(searchText) || url.contains(searchText)) {
+        filtered.add(media);
+    }
+}
+```
+</CodeGroup>
+
+## Pagination
+
+### updatePagination()
+
+```java
+private void updatePagination()
+```
+
+Updates pagination controls and display:
+1. Calculates total pages: `Math.ceil(totalItems / pageSize)`
+2. Updates page status label (e.g., "Page 2 of 5")
+3. Enables/disables Prev/Next buttons based on current page
+4. Updates table model to show current page
+5. Scrolls table to top
+
+<CodeGroup>
+```java Page Calculation
+int totalItems = fullMediaList.size();
+double result = totalItems / pageSize;
+int totalPages = (int) Math.ceil(result);
+
+labelPageStatus.setText("Page " + currentPage + " of " + totalPages);
+buttonNext.setEnabled(currentPage < totalPages);
+buttonPrev.setEnabled(currentPage > 1);
+```
+</CodeGroup>
+
+## Media Operations
+
+### getSelectedMedia()
+
+```java
+private Media getSelectedMedia(String action)
+```
+
+**Parameters:**
+- `action` (String): Action name for error message (e.g., "Delete", "Download")
+
+**Returns:** Selected `Media` object or `null`
+
+Gets the currently selected media from the table:
+1. Gets selected row index
+2. If none selected: Shows feedback message and returns null
+3. Converts view index to model index
+4. Returns Media object from model
+
+### buttonOpenFileActionPerformed()
+
+```java
+private void buttonOpenFileActionPerformed(ActionEvent evt)
+```
+
+Opens the selected media file locally:
+1. Gets selected media
+2. Creates SwingWorker to open file in background
+3. Calls `managementService.openLocalFile()`
+4. Shows "Opening..." feedback on success
+5. Shows "This media is not downloaded." on error
+
+<CodeGroup>
+```java Open File
+SwingWorker<Void, Void> openFileWorker = new SwingWorker<>() {
+    @Override
+    protected Void doInBackground() throws Exception {
+        managementService.openLocalFile(file);
+        return null;
+    }
+
+    @Override
+    protected void done() {
+        try {
+            get();
+            utils.showFeedback(infoLabel, "Opening...", false);
+        } catch (InterruptedException | ExecutionException ex) {
+            utils.showFeedback(infoLabel, "This media is not downloaded.", true);
+        }
+    }
+};
+openFileWorker.execute();
+```
+</CodeGroup>
+
+### buttonUploadFileActionPerformed()
+
+```java
+private void buttonUploadFileActionPerformed(ActionEvent evt)
+```
+
+Uploads a local file to the network library:
+1. Opens JFileChooser for file selection
+2. Prompts user for YouTube URL in infinite loop:
+   - Allows cancel
+   - Rejects empty URLs
+3. Calls `managementService.uploadMedia()`
+4. Shows success alert with file path
+5. Shows error feedback on failure
+
+<CodeGroup>
+```java URL Prompt Loop
+while (true) {
+    youtubeUrl = JOptionPane.showInputDialog(this, "Enter the YouTube URL:");
+    if (youtubeUrl == null) break; // User cancelled
+    if (!youtubeUrl.trim().isEmpty()) break; // Valid URL
+    utils.showFeedback(infoLabel, "URL can't be empty.", true);
+}
+```
+</CodeGroup>
+
+### buttonDownloadFileActionPerformed()
+
+```java
+private void buttonDownloadFileActionPerformed(ActionEvent evt)
+```
+
+Downloads selected network media to local directory:
+1. Gets selected media
+2. Calls `managementService.downloadMedia()`
+3. Shows success alert with output directory
+4. Refreshes local list
+5. Shows "This media is already downloaded." on error
+
+### buttonDeleteFileActionPerformed()
+
+```java
+private void buttonDeleteFileActionPerformed(ActionEvent evt)
+```
+
+Deletes selected media from network and local storage:
+1. Gets selected media
+2. Calls `managementService.deleteMedia()`
+3. Shows success info dialog
+4. Refreshes local list
+5. Shows "You can't delete this media." on error
+
+<Note>
+Delete operation may fail if the user doesn't have permission to delete the media (e.g., media uploaded by another user).
+</Note>
+
+## Button Event Handlers
+
+### buttonRefreshListActionPerformed()
+
+```java
+private void buttonRefreshListActionPerformed(ActionEvent evt)
+```
+
+Manually refreshes the local file list:
+1. Gets current filter selection
+2. Gets filtered files from libraryService
+3. Builds new DefaultListModel
+4. Updates JList
+
+### buttonRefreshTableActionPerformed()
+
+```java
+private void buttonRefreshTableActionPerformed(ActionEvent evt)
+```
+
+Manually refreshes the network media table by calling `refreshTableData(false)`.
+
+### buttonNextActionPerformed()
+
+```java
+private void buttonNextActionPerformed(ActionEvent evt)
+```
+
+Navigates to next page:
+1. Calculates total pages
+2. If `currentPage < totalPages`: Increments page and updates pagination
+
+### buttonPrevActionPerformed()
+
+```java
+private void buttonPrevActionPerformed(ActionEvent evt)
+```
+
+Navigates to previous page:
+1. If `currentPage > 1`: Decrements page and updates pagination
+
+## Layout Structure
+
+The panel uses absolute positioning (null layout) at 1560x634 pixels:
+
+**Left Section (Local Files):**
+- List scroll pane: 10, 50, 550x420
+- Title label: 10, 10, 170x40
+- Refresh button: 10, 470, 40x40
+- Filter combo: 480, 470, 80x20
+
+**Right Section (Network Media):**
+- Table scroll pane: 580, 50, 950x420
+- Title label: 580, 10, 180x40
+- Search field: 1150, 20, 380x22
+- Search icon: 1110, 15, 30x25
+- Action buttons row (y=470):
+  - Refresh: 580, 470, 50x50
+  - Open: 670, 470, 40x50
+  - Upload: 750, 470, 50x50
+  - Delete: 840, 470, 50x50
+  - Download: 940, 470, 40x50
+- Info label: 1000, 490, 330x16
+- Pagination controls:
+  - Prev: 1360, 480, 30x20
+  - Label: 1440, 480, 90x20
+  - Next: 1390, 480, 30x20
+
+## Related Classes
+
+- `ViewToolApp`: Parent frame
+- `MediaTableModel`: Custom table model with pagination
+- `MediaRowRenderer`: Custom cell renderer for colored rows
+- `LibraryService`: Local file system operations
+- `MediaService`: Network media data management
+- `ManagementService`: Coordinates all operations
+- `PreferencesService`: User preferences
+- `TokenService`: Authentication
+- `MediaSyncPolling`: Server polling component
+- `Media`: Data class for media items
+- `MediaItem`: Data class for local files
+- `UIUtils`: UI utilities

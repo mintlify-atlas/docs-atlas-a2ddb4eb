@@ -1,0 +1,427 @@
+---
+title: yt-dlp Configuration
+description: Install, configure, and use yt-dlp for downloading YouTube content in ViewTool
+---
+
+## Overview
+
+ViewTool uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) as its core download engine. yt-dlp is a powerful command-line tool for downloading videos from YouTube and other platforms. This guide covers installation, configuration, and how ViewTool integrates with yt-dlp.
+
+## Installing yt-dlp
+
+<Steps>
+  <Step title="Download yt-dlp">
+    Download the latest `yt-dlp.exe` binary from the official repository:
+
+    <CodeGroup>
+    ```bash Windows (PowerShell)
+    # Download latest release
+    Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "yt-dlp.exe"
+    ```
+
+    ```bash Windows (Command Prompt)
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o yt-dlp.exe
+    ```
+
+    ```bash Direct Download
+    https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Choose Installation Location">
+    You have two options:
+
+    **Option 1: System PATH** (Recommended)
+    - Place `yt-dlp.exe` in a directory that's in your system PATH (e.g., `C:\Windows\System32`)
+    - ViewTool will find it automatically
+
+    **Option 2: Custom Location**
+    - Place `yt-dlp.exe` anywhere (e.g., `C:\Program Files\yt-dlp\`)
+    - Configure the path in ViewTool preferences (see below)
+  </Step>
+
+  <Step title="Verify Installation">
+    Test yt-dlp from command line:
+
+    ```bash
+    yt-dlp --version
+    ```
+
+    You should see version information like `2024.03.10`.
+  </Step>
+</Steps>
+
+<Note>
+ViewTool defaults to using `yt-dlp` from the system PATH if no custom path is configured.
+</Note>
+
+## Configuring yt-dlp Path in ViewTool
+
+If yt-dlp is not in your system PATH, configure its location:
+
+<Steps>
+  <Step title="Open Preferences">
+    Navigate to **Edit > Preferences** from the menu bar.
+  </Step>
+
+  <Step title="Locate yt-dlp Executable">
+    Click the yt-dlp icon button labeled "Locate yt-dlp.exe":
+
+    ```java
+    private void buttonDirYtActionPerformed(java.awt.event.ActionEvent evt) {
+        int result = fileChooserYt.showOpenDialog(this);
+        if (result == javax.swing.JFileChooser.APPROVE_OPTION) {
+            File selectedDir = fileChooserYt.getSelectedFile();
+            prefService.setYtDlpPath(selectedDir.toPath());
+            JOptionPane.showMessageDialog(this,
+                "Selected directory:\n" + selectedDir.getAbsolutePath(),
+                "Download folder", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Select Executable">
+    Browse to the directory containing `yt-dlp.exe` and select it. The path is saved immediately.
+  </Step>
+</Steps>
+
+<CodeGroup>
+```java PreferencesService.java
+public void setYtDlpPath(Path p) {
+    prefs.put(KEY_YTDLP, p.toString());
+}
+
+public Path getYtDlpPath() {
+    return Path.of(prefs.get(KEY_YTDLP, "yt-dlp"));
+}
+```
+
+```bash Example Paths
+C:\Program Files\yt-dlp\yt-dlp.exe
+C:\Users\YourName\bin\yt-dlp.exe
+D:\Tools\yt-dlp.exe
+```
+</CodeGroup>
+
+## How ViewTool Uses yt-dlp
+
+ViewTool constructs command-line arguments and executes yt-dlp through the `YtDlpService` class:
+
+### Download Request Structure
+
+```java DownloadRequest.java
+public record DownloadRequest(
+    URI url,
+    MediaFormat format,      // MP3 or MP4
+    boolean audioOnly,
+    Path outputDir,
+    String limit,            // Speed limit in MB/s
+    boolean m3uFile         // Create playlist file
+) {}
+```
+
+### YtDlpService Implementation
+
+<CodeGroup>
+```java YtDlpService.java
+public class YtDlpService {
+    private final Path ytDplPath;
+
+    public YtDlpService(Path ytDlpPath) {
+        this.ytDplPath = ytDlpPath;
+    }
+
+    public int download(DownloadRequest req, Appendable out, IntConsumer onPersent) 
+            throws IOException, InterruptedException {
+        List<String> commands = new ArrayList<>();
+        commands.add(ytDplPath.toString());
+
+        // Output template
+        commands.add("-o");
+        commands.add("%(title)s.%(ext)s");
+
+        // Format-specific options
+        switch (req.format()) {
+            case MP3 -> {
+                commands.add("-x");                // Extract audio
+                commands.add("--audio-format");
+                commands.add("mp3");
+                commands.add("--audio-quality");
+                commands.add("0");                 // Best quality
+            }
+            case MP4 -> {
+                commands.add("-f");
+                commands.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4");
+            }
+        }
+
+        // Audio-only for MP4
+        if (req.audioOnly() && req.format() == MediaFormat.MP4) {
+            commands.add("-x");
+            commands.add("--audio-format");
+            commands.add("m4a");
+        }
+
+        // Progress reporting
+        commands.add("--newline");
+        commands.add("--progress-template");
+        commands.add("%(progress._percent_str)s");
+
+        // Speed limit
+        if (req.limit() != null) {
+            commands.add("--limit-rate");
+            commands.add(req.limit());
+        }
+
+        // M3U playlist file
+        if (req.m3uFile()) {
+            commands.add("--print-to-file");
+            commands.add("after_move:%(filepath)s");
+            commands.add(req.outputDir().resolve("playlist.m3u").toString());
+        }
+
+        commands.add(req.url().toString());
+
+        File fileDirectory = req.outputDir() != null ? req.outputDir().toFile() : null;
+        return ProcessRunner.run(commands, fileDirectory, out, onPersent);
+    }
+}
+```
+
+```bash Example yt-dlp Command
+# Generated command for MP3 download with speed limit
+yt-dlp.exe -o "%(title)s.%(ext)s" -x --audio-format mp3 --audio-quality 0 --newline --progress-template "%(progress._percent_str)s" --limit-rate 5M "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+```
+</CodeGroup>
+
+## Download Options
+
+### Format Selection
+
+ViewTool supports two primary formats:
+
+<CodeGroup>
+```java MP3 (Audio)
+// Extracts audio and converts to MP3
+case MP3 -> {
+    commands.add("-x");              // Extract audio
+    commands.add("--audio-format");
+    commands.add("mp3");
+    commands.add("--audio-quality");
+    commands.add("0");               // Best quality (320kbps)
+}
+```
+
+```java MP4 (Video)
+// Downloads best video + audio and merges
+case MP4 -> {
+    commands.add("-f");
+    commands.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4");
+}
+```
+
+```java MP4 Audio-Only
+// Downloads MP4 but extracts only audio as M4A
+if (req.audioOnly() && req.format() == MediaFormat.MP4) {
+    commands.add("-x");
+    commands.add("--audio-format");
+    commands.add("m4a");
+}
+```
+</CodeGroup>
+
+<Warning>
+MP3 format requires FFmpeg to be installed for audio conversion. See the [FFmpeg configuration guide](/configuration/ffmpeg).
+</Warning>
+
+### Output Template
+
+Files are named using yt-dlp's template system:
+
+```java
+commands.add("-o");
+commands.add("%(title)s.%(ext)s");
+```
+
+This creates files like:
+- `My Awesome Video.mp4`
+- `Cool Song.mp3`
+- `Tutorial Part 1.m4a`
+
+### Progress Tracking
+
+ViewTool monitors download progress in real-time:
+
+```java
+// Enable progress reporting
+commands.add("--newline");
+commands.add("--progress-template");
+commands.add("%(progress._percent_str)s");
+```
+
+The `ProcessRunner` class parses percentage values and updates the UI progress bar:
+
+```java ProcessRunner.java
+private static final Pattern PERCENTAGE = Pattern.compile("(\\d{1,3}(?:\\.\\d+)?)%");
+
+private static void parseAndSendPercent(String s, IntConsumer onPercent) {
+    try {
+        double d = Double.parseDouble(s);
+        int pct = (int) Math.round(d);
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        onPercent.accept(pct);
+    } catch (NumberFormatException ignore) {}
+}
+```
+
+### Speed Limiting
+
+Control download bandwidth:
+
+```java
+if (req.limit() != null) {
+    commands.add("--limit-rate");
+    commands.add(req.limit());  // e.g., "5M" for 5 MB/s
+}
+```
+
+<Note>
+Speed limits are configured in the Preferences panel and applied to all downloads. Set to `0` or empty for no limit.
+</Note>
+
+### Playlist Support
+
+Automatically create `.m3u` playlist files:
+
+```java
+if (req.m3uFile()) {
+    commands.add("--print-to-file");
+    commands.add("after_move:%(filepath)s");
+    commands.add(req.outputDir().resolve("playlist.m3u").toString());
+}
+```
+
+The resulting `playlist.m3u` file contains paths to all downloaded media, compatible with VLC, Windows Media Player, and other media players.
+
+## Download Controller
+
+The `DownloadController` class manages the download workflow:
+
+```java DownloadController.java
+public class DownloadController {
+    private final YtDlpService service;
+
+    public DownloadController(YtDlpService service) {
+        this.service = service;
+    }
+
+    public void validateUrl(String raw) {
+        ValidationService.requireValidUrl(raw);
+    }
+
+    public int startDownload(
+            String rawUrl, 
+            MediaFormat format, 
+            boolean onlyAudio, 
+            Path outputDir, 
+            Appendable out, 
+            IntConsumer onPersent,
+            String rawLimit,
+            boolean m3uFile) throws Exception {
+        
+        URI url = ValidationService.requireValidUrl(rawUrl);
+        String limit = ValidationService.requireValidLimit(rawLimit);
+        
+        DownloadRequest req = new DownloadRequest(
+            url, format, onlyAudio, outputDir, limit, m3uFile
+        );
+        
+        return service.download(req, out, onPersent);
+    }
+}
+```
+
+## Troubleshooting
+
+### yt-dlp Not Found
+
+**Error:** `java.io.IOException: Cannot run program "yt-dlp"`
+
+**Solutions:**
+- Verify yt-dlp.exe exists at the configured path
+- Add yt-dlp to your system PATH
+- Reconfigure the path in Preferences
+- Download yt-dlp if not installed
+
+### Download Fails
+
+**Error:** yt-dlp returns non-zero exit code
+
+**Solutions:**
+- Check that the YouTube URL is valid
+- Ensure you have internet connectivity
+- Update yt-dlp to the latest version
+- Check yt-dlp output in the log panel for specific errors
+
+### Audio Conversion Fails (MP3)
+
+**Error:** `ERROR: ffmpeg not found`
+
+**Solutions:**
+- Install FFmpeg (see [FFmpeg configuration](/configuration/ffmpeg))
+- Add FFmpeg to your system PATH
+- MP3 downloads require FFmpeg for audio conversion
+
+### Permission Denied
+
+**Error:** Cannot write to output directory
+
+**Solutions:**
+- Verify write permissions to the output directory
+- Choose a different output directory in Preferences
+- Run ViewTool with appropriate user permissions
+
+## Advanced Usage
+
+### Supported Platforms
+
+While ViewTool is designed for YouTube, yt-dlp supports over 1,000 sites including:
+- YouTube (videos, playlists, channels)
+- Vimeo
+- Twitter/X
+- Facebook
+- Twitch
+- And many more
+
+Simply paste any supported URL into ViewTool's URL field.
+
+### Command-Line Equivalents
+
+ViewTool's operations translate to these yt-dlp commands:
+
+<CodeGroup>
+```bash MP3 Download
+yt-dlp -x --audio-format mp3 --audio-quality 0 -o "%(title)s.%(ext)s" "https://youtube.com/watch?v=VIDEO_ID"
+```
+
+```bash MP4 Download
+yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" -o "%(title)s.%(ext)s" "https://youtube.com/watch?v=VIDEO_ID"
+```
+
+```bash With Speed Limit
+yt-dlp --limit-rate 5M -x --audio-format mp3 --audio-quality 0 -o "%(title)s.%(ext)s" "https://youtube.com/watch?v=VIDEO_ID"
+```
+
+```bash Playlist with M3U
+yt-dlp --print-to-file "after_move:%(filepath)s" "playlist.m3u" -o "%(title)s.%(ext)s" "https://youtube.com/playlist?list=PLAYLIST_ID"
+```
+</CodeGroup>
+
+## Next Steps
+
+- [Configure FFmpeg](/configuration/ffmpeg) for audio conversion
+- Learn about [initial setup](/configuration/setup)
+- Explore the main download interface

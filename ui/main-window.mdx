@@ -1,0 +1,298 @@
+---
+title: "Main Window (ViewToolApp)"
+description: "The primary application window that manages navigation, authentication, and panel switching in ViewTool"
+---
+
+## Overview
+
+The `ViewToolApp` class (ViewToolApp.java:20) is the main JFrame window that serves as the application's primary container. It manages the overall UI structure, handles user authentication state, and controls navigation between different panels.
+
+## Architecture
+
+### Layout Structure
+
+The main window uses a BorderLayout with two key sections:
+
+```java
+root = new JPanel(new BorderLayout());
+
+// Top navigation panel with buttons
+panelButtonMainAndSetting = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+panelButtonMainAndSetting.add(buttonMain);
+panelButtonMainAndSetting.add(buttonSetting);
+
+// Dynamic content panel
+dinamicPanel = new JPanel(new BorderLayout());
+
+root.add(panelButtonMainAndSetting, BorderLayout.NORTH);
+root.add(dinamicPanel, BorderLayout.CENTER);
+```
+
+ViewToolApp.java:86-108
+
+<Note>
+The `dinamicPanel` is the core container that switches between different views (Login, Main, Management, and Preferences panels) based on user actions.
+</Note>
+
+## Navigation Components
+
+### Home Button
+
+The home button navigates users back to the main view with the management panel:
+
+- **Icon**: `homeicon.png` (30x30 pixels)
+- **Tooltip**: "Go Home"
+- **Action**: Shows the combined PanelMain and PanelManagement view
+- **Visibility**: Hidden on the main screen, visible on preferences screen
+
+```java
+buttonMain.setIcon(utils.getFixedSizeIcon("homeicon.png",30,30));
+utils.setHoverButton(buttonMain);
+```
+
+ViewToolApp.java:96-99
+
+### Settings Button
+
+The settings button opens the preferences panel:
+
+- **Icon**: `settingicon.png` (30x30 pixels)
+- **Tooltip**: "Go Setting"
+- **Action**: Displays the PanelPreferences view
+- **Visibility**: Only visible when user is logged in
+
+```java
+buttonSetting.setIcon(utils.getFixedSizeIcon("settingicon.png",30,30));
+utils.setHoverButton(buttonSetting);
+```
+
+ViewToolApp.java:95-99
+
+<Tip>
+Both navigation buttons use hover effects through `UIUtils.setHoverButton()` to provide visual feedback on mouse-over.
+</Tip>
+
+## Menu Bar
+
+The application features a comprehensive menu bar with three main menus:
+
+### File Menu
+
+**Logout** (MenuLogoutItem)
+- Shows the login panel
+- Sets logged in state to false
+- Deletes stored authentication token
+- Stops media sync polling
+- Hides navigation buttons
+
+```java
+if (isLoggedIn()) {
+    showPanel(new Login(this));
+    setLoggedIn(false);
+    tokenService.deleteToken();
+    mediaSyncPolling.setRunning(false);
+    panelButtonMainAndSetting.setVisible(false);
+}
+```
+
+ViewToolApp.java:357-365
+
+**Exit** (MenuItemExit)
+- Terminates the application with `System.exit(0)`
+
+ViewToolApp.java:333-335
+
+### Edit Menu
+
+**Preferences** (MenuItemPreferences)
+- Opens the preferences panel (only when logged in)
+- Allows configuration of download settings, paths, and speed limits
+
+```java
+if (isLoggedIn()) {
+    showPanel(panelPreferences);
+}
+```
+
+ViewToolApp.java:349-353
+
+### Help Menu
+
+**About** (MenuItemAbout)
+- Displays application information dialog
+- Shows author, subject, date, and resources used (yt-dlp, ffmpeg/ffprobe)
+
+```java
+TextAreaAbout.setText("Author: César Martín Pérez.\n" +
+    "Subject: DI - DAM 2025/2026\n" +
+    "Date: 27/10/2025\n\n" +
+    "Recourses:\n- yt-dlp\n- ffmpeg/ffprobe\n");
+```
+
+ViewToolApp.java:205
+
+## Authentication Flow
+
+### Initial State
+
+On application startup, the window checks for a stored authentication token:
+
+```java
+token = tokenService.getToken();
+if (token == null) {
+    Login login = new Login(this);
+    showPanel(login);
+} else {
+    loggedSuccess(token);
+}
+```
+
+ViewToolApp.java:49-56
+
+<Info>
+If no token is found, the login panel is displayed. If a valid token exists, the user is automatically logged in and shown the main interface.
+</Info>
+
+### Successful Login
+
+When authentication succeeds, the `loggedSuccess()` method:
+
+1. Stores the authentication token
+2. Sets logged in state to true
+3. Shows the main view with management panel
+4. Makes the settings button visible
+
+```java
+public final void loggedSuccess(String token) {
+    this.token = token;
+    this.loggedIn = true;
+    showMainAndManagement(panelMain, panelManagement);
+    buttonSetting.setVisible(true);
+}
+```
+
+ViewToolApp.java:110-116
+
+## Panel Management
+
+### showPanel() Method
+
+This method handles switching between single panels:
+
+```java
+private void showPanel(JPanel panel) {
+    dinamicPanel.removeAll();
+    panel.setOpaque(true);
+    dinamicPanel.add(panel, BorderLayout.CENTER);
+    
+    if (!isLoggedIn()) {
+        panelButtonMainAndSetting.setVisible(false);
+    } else {
+        panelButtonMainAndSetting.setVisible(true);
+    }
+    
+    dinamicPanel.revalidate();
+    dinamicPanel.repaint();
+    pack();
+    setLocationRelativeTo(null);
+    
+    buttonSetting.setVisible(false);
+    buttonMain.setVisible(true);
+}
+```
+
+ViewToolApp.java:138-159
+
+### showMainAndManagement() Method
+
+This special method displays two panels simultaneously:
+
+```java
+public void showMainAndManagement(JPanel top, JPanel bottom) {
+    JPanel combined = new JPanel(new BorderLayout());
+    top.setPreferredSize(new java.awt.Dimension(0, 167));
+    combined.add(top, BorderLayout.NORTH);
+    combined.add(bottom, BorderLayout.CENTER);
+    showPanel(combined);
+    buttonSetting.setVisible(true);
+    buttonMain.setVisible(false);
+    pack();
+}
+```
+
+ViewToolApp.java:161-172
+
+<Accordion title="Why combine panels?">
+The main view combines PanelMain (download interface) and PanelManagement (library management) to provide a unified workflow where users can download content and immediately manage their media library without switching views.
+</Accordion>
+
+## Global UI Styling
+
+The application applies consistent styling across all components:
+
+```java
+private static void applyGlobalUI() {
+    Color myBackgroundColor = Color.WHITE;
+    java.awt.Font myFont = new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 14);
+    
+    UIManager.put("Panel.background", myBackgroundColor);
+    UIManager.put("Label.font", myFont);
+    UIManager.put("Button.font", myFont);
+    UIManager.put("Button.background", java.awt.Color.lightGray);
+    UIManager.put("Button.foreground", java.awt.Color.BLACK);
+    UIManager.put("ComboBox.background", java.awt.Color.lightGray);
+    UIManager.put("Panel.opaque", true);
+}
+```
+
+ViewToolApp.java:60-84
+
+<Note>
+- **Font**: Segoe UI, 14pt plain
+- **Background**: White for panels and backgrounds
+- **Buttons**: Light gray background with black text
+- **Consistent opacity**: All panels are opaque by default
+</Note>
+
+## Configuration
+
+### API Integration
+
+The window connects to a remote API for media synchronization:
+
+```java
+private final String apiUrl = "https://dimedianetapi9.azurewebsites.net/";
+```
+
+ViewToolApp.java:24
+
+### Window Properties
+
+- **Title**: "ViewTool"
+- **Default size**: 1180 x 506 pixels
+- **Default close operation**: EXIT_ON_CLOSE
+- **Background**: White
+
+ViewToolApp.java:221-330
+
+## Key Services
+
+The main window manages several key services:
+
+| Service | Purpose |
+|---------|----------|
+| TokenService | Handles authentication token storage and retrieval |
+| MediaSyncPolling | Polls remote API for media updates |
+| PanelManagement | Displays and manages downloaded media |
+| PanelMain | Provides download interface |
+| PanelPreferences | Configuration and settings panel |
+
+## Best Practices
+
+<Tip>
+When extending ViewToolApp:
+- Always check `isLoggedIn()` before showing authenticated panels
+- Use `showPanel()` for single views, `showMainAndManagement()` for combined views
+- Call `pack()` and `setLocationRelativeTo(null)` to properly size and center the window
+- Update navigation button visibility based on the current view
+</Tip>

@@ -1,0 +1,237 @@
+---
+title: 'MediaLibrary'
+description: 'Service for scanning and managing local media files'
+---
+
+## Overview
+
+The `MediaLibrary` class provides functionality for scanning directories, cataloging media files, and performing file operations. It automatically detects file metadata including MIME types, sizes, and timestamps.
+
+**Package:** `martin.viewtool.core`
+
+## Constructor
+
+```java
+public MediaLibrary()
+```
+
+No parameters required. Creates a new instance ready to scan media directories.
+
+## Methods
+
+### scan()
+
+Scans a directory and returns a list of media files with their metadata.
+
+```java
+public List<MediaItem> scan(Path dir) throws IOException
+```
+
+<ParamField path="dir" type="Path" required>
+  Directory path to scan for media files
+</ParamField>
+
+<ResponseField name="mediaItems" type="List<MediaItem>">
+  List of media items sorted by date (newest first). Returns empty list if directory doesn't exist.
+</ResponseField>
+
+### Behavior
+
+1. Validates that the path is a directory
+2. Lists all regular files (excludes subdirectories)
+3. Extracts metadata for each file:
+   - File name and extension
+   - File size in bytes
+   - MIME type (detected or inferred from extension)
+   - Last modified or creation timestamp
+4. Sorts results by date in descending order (newest first)
+5. Filters out files that cannot be read
+
+### Supported Media Types
+
+The library recognizes the following MIME types:
+
+| Extension | MIME Type | Category |
+|-----------|-----------|----------|
+| mp4, m4v, mov | video/mp4 | Video |
+| mp3 | audio/mpeg | Audio |
+| m4a, aac | audio/mp4 | Audio |
+| webm | video/webm | Video |
+| wav | audio/wav | Audio |
+| *(other)* | application/octet-stream | Generic |
+
+### Code Example
+
+<CodeGroup>
+
+```java Basic Scan
+MediaLibrary library = new MediaLibrary();
+Path downloadsDir = Path.of("/home/user/ViewToolDownloads");
+
+try {
+    List<MediaItem> items = library.scan(downloadsDir);
+    
+    System.out.println("Found " + items.size() + " media files:");
+    for (MediaItem item : items) {
+        System.out.printf("%s (%s) - %d bytes%n",
+            item.getName(),
+            item.getMimeType(),
+            item.getSizeBytes()
+        );
+    }
+} catch (IOException e) {
+    System.err.println("Failed to scan directory: " + e.getMessage());
+}
+```
+
+```java Filter Video Files
+MediaLibrary library = new MediaLibrary();
+List<MediaItem> allMedia = library.scan(Path.of("/media"));
+
+// Filter only video files
+List<MediaItem> videos = allMedia.stream()
+    .filter(item -> item.getMimeType().startsWith("video/"))
+    .toList();
+
+System.out.println("Video files: " + videos.size());
+```
+
+```java Sort by Size
+MediaLibrary library = new MediaLibrary();
+List<MediaItem> items = library.scan(Path.of("/downloads"));
+
+// Sort by file size (largest first)
+List<MediaItem> sorted = items.stream()
+    .sorted(Comparator.comparingLong(MediaItem::getSizeBytes).reversed())
+    .toList();
+
+for (MediaItem item : sorted) {
+    long mb = item.getSizeBytes() / (1024 * 1024);
+    System.out.println(item.getName() + ": " + mb + " MB");
+}
+```
+
+</CodeGroup>
+
+### delete()
+
+Deletes a media file from the filesystem.
+
+```java
+public boolean delete(MediaItem file) throws IOException
+```
+
+<ParamField path="file" type="MediaItem" required>
+  Media item to delete. Uses the item's path property.
+</ParamField>
+
+<ResponseField name="deleted" type="boolean">
+  Returns `true` if the file was deleted, `false` if it didn't exist
+</ResponseField>
+
+### Code Example
+
+<CodeGroup>
+
+```java Delete Single File
+MediaLibrary library = new MediaLibrary();
+List<MediaItem> items = library.scan(Path.of("/downloads"));
+
+if (!items.isEmpty()) {
+    MediaItem first = items.get(0);
+    boolean deleted = library.delete(first);
+    
+    if (deleted) {
+        System.out.println("Deleted: " + first.getName());
+    } else {
+        System.out.println("File not found");
+    }
+}
+```
+
+```java Delete Old Files
+MediaLibrary library = new MediaLibrary();
+List<MediaItem> items = library.scan(Path.of("/downloads"));
+
+Instant thirtyDaysAgo = Instant.now().minus(30, ChronoUnit.DAYS);
+int deletedCount = 0;
+
+for (MediaItem item : items) {
+    if (item.getDate().isBefore(thirtyDaysAgo)) {
+        if (library.delete(item)) {
+            deletedCount++;
+        }
+    }
+}
+
+System.out.println("Deleted " + deletedCount + " old files");
+```
+
+```java Safe Delete with Confirmation
+MediaLibrary library = new MediaLibrary();
+MediaItem itemToDelete = getSelectedItem();
+
+try {
+    boolean result = library.delete(itemToDelete);
+    if (result) {
+        JOptionPane.showMessageDialog(null, 
+            "File deleted successfully");
+    } else {
+        JOptionPane.showMessageDialog(null, 
+            "File not found", 
+            "Warning", 
+            JOptionPane.WARNING_MESSAGE);
+    }
+} catch (IOException e) {
+    JOptionPane.showMessageDialog(null, 
+        "Delete failed: " + e.getMessage(), 
+        "Error", 
+        JOptionPane.ERROR_MESSAGE);
+}
+```
+
+</CodeGroup>
+
+## MediaItem Properties
+
+Each scanned file is represented as a `MediaItem` with:
+
+<ResponseField name="path" type="Path">
+  Full filesystem path to the file
+</ResponseField>
+
+<ResponseField name="name" type="String">
+  File name including extension
+</ResponseField>
+
+<ResponseField name="ext" type="String">
+  File extension in lowercase (without dot)
+</ResponseField>
+
+<ResponseField name="sizeBytes" type="long">
+  File size in bytes
+</ResponseField>
+
+<ResponseField name="mimeType" type="String">
+  MIME type (detected or inferred)
+</ResponseField>
+
+<ResponseField name="date" type="Instant">
+  Last modified time, or creation time if modified time unavailable
+</ResponseField>
+
+## Exceptions
+
+- **IOException**: Thrown if directory cannot be read or file deletion fails
+
+## Implementation Notes
+
+- Files that cannot be read are silently skipped during scan
+- The scan operation does not recurse into subdirectories
+- MIME type detection uses Java's `Files.probeContentType()` with fallback to extension-based mapping
+- Date fallback order: last modified time → creation time → EPOCH
+- Delete operation uses `Files.deleteIfExists()` for safe deletion
+
+## Related Classes
+
+- `MediaItem`: Immutable class representing a media file with metadata

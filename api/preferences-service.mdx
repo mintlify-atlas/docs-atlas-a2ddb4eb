@@ -1,0 +1,251 @@
+---
+title: 'PreferencesService'
+description: 'Service for managing application configuration and user preferences using Java Preferences API'
+---
+
+## Overview
+
+The `PreferencesService` class manages persistent user preferences for the ViewTool application, including yt-dlp executable path, output directory, and download speed limits. It uses Java's `Preferences` API to store configuration in the user's registry or preferences file.
+
+**Package:** `martin.viewtool.config`
+
+## Constructor
+
+```java
+public PreferencesService()
+```
+
+Creates a new instance that stores preferences under the node `martin.viewtool` in the user's preferences tree.
+
+## Configuration Keys
+
+The service manages three configuration keys:
+
+- `ytdlp.path` - Path to the yt-dlp executable
+- `output.dir` - Output directory for downloaded media files
+- `limit_rate` - Download speed limit
+
+## Methods
+
+### setYtDlpPath
+
+Sets the path to the yt-dlp executable.
+
+```java
+public void setYtDlpPath(Path p)
+```
+
+<ParamField path="p" type="Path">
+  The filesystem path to the yt-dlp executable
+</ParamField>
+
+**Example:**
+
+```java
+PreferencesService prefService = new PreferencesService();
+prefService.setYtDlpPath(Path.of("/usr/local/bin/yt-dlp"));
+```
+
+### getYtDlpPath
+
+Retrieves the configured yt-dlp executable path.
+
+```java
+public Path getYtDlpPath()
+```
+
+<ResponseField name="returns" type="Path">
+  The path to yt-dlp, or `Path.of("yt-dlp")` as default if not configured
+</ResponseField>
+
+**Example:**
+
+```java
+PreferencesService prefService = new PreferencesService();
+Path ytdlpPath = prefService.getYtDlpPath();
+// Returns: configured path or default "yt-dlp"
+```
+
+### setOutputDir
+
+Sets the output directory for downloaded media files.
+
+```java
+public void setOutputDir(Path p)
+```
+
+<ParamField path="p" type="Path">
+  The filesystem path where downloads should be saved
+</ParamField>
+
+**Example:**
+
+```java
+PreferencesService prefService = new PreferencesService();
+prefService.setOutputDir(Path.of("/home/user/Downloads/Videos"));
+```
+
+### getOutputDir
+
+Retrieves the configured output directory, creating it if it doesn't exist.
+
+```java
+public Path getOutputDir()
+```
+
+<ResponseField name="returns" type="Path">
+  The output directory path. Defaults to `~/ViewToolDownloads` if not configured
+</ResponseField>
+
+**Behavior:**
+
+- Returns the configured output directory
+- If not configured, defaults to `ViewToolDownloads` in the user's home directory
+- Automatically creates the directory if it doesn't exist
+- Prints error to stderr if directory creation fails
+
+**Example:**
+
+<CodeGroup>
+```java Basic Usage
+PreferencesService prefService = new PreferencesService();
+Path outputDir = prefService.getOutputDir();
+// Returns: configured path or ~/ViewToolDownloads
+```
+
+```java With Default Path
+// First time usage, no preference set
+Path outputDir = prefService.getOutputDir();
+// Returns: /home/user/ViewToolDownloads (created if doesn't exist)
+```
+
+```java In Download Flow
+private final PreferencesService prefService = new PreferencesService();
+
+public void startDownload(String url) {
+    Path outputDir = prefService.getOutputDir();
+    downloadService.download(url, outputDir);
+}
+```
+</CodeGroup>
+
+### setLimitSpeed
+
+Sets the download speed limit.
+
+```java
+public void setLimitSpeed(String raw)
+```
+
+<ParamField path="raw" type="String">
+  The speed limit string (can be null to clear the limit)
+</ParamField>
+
+**Behavior:**
+
+- Stores the speed limit preference
+- If `raw` is null, stores an empty string
+
+**Example:**
+
+```java
+PreferencesService prefService = new PreferencesService();
+prefService.setLimitSpeed("50M");
+
+// Clear limit
+prefService.setLimitSpeed(null);
+```
+
+### getLimitSpeed
+
+Retrieves the configured download speed limit.
+
+```java
+public String getLimitSpeed()
+```
+
+<ResponseField name="returns" type="String">
+  The configured speed limit, or empty string if not set
+</ResponseField>
+
+**Example:**
+
+<CodeGroup>
+```java Basic Usage
+PreferencesService prefService = new PreferencesService();
+String limit = prefService.getLimitSpeed();
+// Returns: configured limit or ""
+```
+
+```java In UI Panel
+private final PreferencesService prefService = new PreferencesService();
+
+public void loadPreferences() {
+    String savedLimit = prefService.getLimitSpeed();
+    speedLimitField.setText(savedLimit);
+}
+
+public void savePreferences() {
+    String speed = speedLimitField.getText();
+    ValidationService.requireValidLimit(speed);
+    prefService.setLimitSpeed(speed);
+}
+```
+</CodeGroup>
+
+## Usage Examples
+
+### Complete Configuration Flow
+
+```java
+public class PanelPreferences {
+    private final PreferencesService prefService = new PreferencesService();
+    
+    public void loadSettings() {
+        // Load saved preferences
+        Path ytdlp = prefService.getYtDlpPath();
+        Path output = prefService.getOutputDir();
+        String limit = prefService.getLimitSpeed();
+        
+        // Populate UI fields
+        ytdlpPathField.setText(ytdlp.toString());
+        outputDirField.setText(output.toString());
+        speedLimitField.setText(limit);
+    }
+    
+    public void saveSettings() {
+        // Validate and save
+        String speed = speedLimitField.getText();
+        ValidationService.requireValidLimit(speed);
+        
+        prefService.setYtDlpPath(Path.of(ytdlpPathField.getText()));
+        prefService.setOutputDir(Path.of(outputDirField.getText()));
+        prefService.setLimitSpeed(speed);
+    }
+}
+```
+
+### Service Injection
+
+```java
+public class ManagementService {
+    private final PreferencesService prefs;
+    
+    public ManagementService(LibraryService lib, MediaService media, PreferencesService prefs) {
+        this.prefs = prefs;
+    }
+    
+    public void processMedia() {
+        Path outputDir = prefs.getOutputDir();
+        // Use output directory for media processing
+    }
+}
+```
+
+## Implementation Notes
+
+- Uses Java `Preferences` API with `userRoot()` scope
+- Preferences are stored under node path `martin.viewtool`
+- All paths are stored as strings and converted to `Path` objects on retrieval
+- Directory creation is automatic and silent (errors printed to stderr)
+- Thread-safe through Java Preferences API guarantees

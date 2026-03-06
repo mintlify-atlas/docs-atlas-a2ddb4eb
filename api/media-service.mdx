@@ -1,0 +1,434 @@
+---
+title: 'MediaService'
+description: 'Service for managing network and local media collections'
+---
+
+## Overview
+
+The `MediaService` class manages a combined collection of network-sourced media and local files. It provides functionality for synchronizing network media, tracking downloads, and filtering media collections.
+
+**Package:** `martin.viewtool.core`
+
+## Constructor
+
+```java
+public MediaService()
+```
+
+Creates a new MediaService with an empty network media collection.
+
+## Methods
+
+### getNetworkMediaAll()
+
+Returns a copy of all network media items.
+
+```java
+public List<Media> getNetworkMediaAll()
+```
+
+<ResponseField name="networkMedia" type="List<Media>">
+  New ArrayList containing all network media items. Returns defensive copy to prevent external modification.
+</ResponseField>
+
+### Code Example
+
+```java
+MediaService service = new MediaService();
+List<Media> networkMedia = service.getNetworkMediaAll();
+
+System.out.println("Network media count: " + networkMedia.size());
+for (Media media : networkMedia) {
+    System.out.println(media.mediaFileName);
+}
+```
+
+### getDownloadBaseDir()
+
+Returns the base directory for downloaded media files, creating it if necessary.
+
+```java
+public Path getDownloadBaseDir()
+```
+
+<ResponseField name="downloadPath" type="Path">
+  Path to `~/ViewToolDownloads` directory. Directory is created if it doesn't exist.
+</ResponseField>
+
+### Behavior
+
+- Returns `{user.home}/ViewToolDownloads`
+- Creates directory structure if missing
+- Safe to call multiple times
+
+### Code Example
+
+```java
+MediaService service = new MediaService();
+Path downloadDir = service.getDownloadBaseDir();
+
+System.out.println("Downloads directory: " + downloadDir);
+// Output: /home/username/ViewToolDownloads
+
+File dir = downloadDir.toFile();
+System.out.println("Exists: " + dir.exists());
+// Output: Exists: true
+```
+
+### getLocalFile()
+
+Resolves the local file path for a network media item.
+
+```java
+public File getLocalFile(Media media)
+```
+
+<ParamField path="media" type="Media" required>
+  Media object with `mediaFileName` property
+</ParamField>
+
+<ResponseField name="localFile" type="File">
+  File object pointing to the media file in the download directory
+</ResponseField>
+
+### Code Example
+
+<CodeGroup>
+
+```java Check If Downloaded
+MediaService service = new MediaService();
+Media media = getNetworkMedia();  // media.mediaFileName = "video.mp4"
+
+File localFile = service.getLocalFile(media);
+if (localFile.exists()) {
+    System.out.println("File already downloaded: " + localFile.length() + " bytes");
+} else {
+    System.out.println("File not downloaded yet");
+}
+```
+
+```java Open Local File
+Media media = selectedMedia;
+File file = service.getLocalFile(media);
+
+if (file.exists()) {
+    Desktop.getDesktop().open(file);
+} else {
+    JOptionPane.showMessageDialog(null, "File not found locally");
+}
+```
+
+</CodeGroup>
+
+### addNewMediaNetwork()
+
+Adds new media items to the network collection, avoiding duplicates.
+
+```java
+public void addNewMediaNetwork(List<Media> newMedia)
+```
+
+<ParamField path="newMedia" type="List<Media>" required>
+  List of media items to add. Null items are skipped.
+</ParamField>
+
+### Behavior
+
+- Skips null media items
+- Prevents duplicates based on media ID
+- Only adds media if ID doesn't exist or ID is invalid (≤ 0)
+- Thread-safe for single-threaded access
+
+### Code Example
+
+<CodeGroup>
+
+```java Add From API Response
+MediaService service = new MediaService();
+
+// Fetch from REST API
+List<Media> apiResponse = fetchMediaFromServer();
+service.addNewMediaNetwork(apiResponse);
+
+System.out.println("Total network media: " + 
+    service.getNetworkMediaAll().size());
+```
+
+```java Polling Update
+// Periodically sync with server
+ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+scheduler.scheduleAtFixedRate(() -> {
+    try {
+        List<Media> updates = api.getLatestMedia();
+        service.addNewMediaNetwork(updates);
+        System.out.println("Media synced: " + updates.size() + " new items");
+    } catch (Exception e) {
+        System.err.println("Sync failed: " + e.getMessage());
+    }
+}, 0, 30, TimeUnit.SECONDS);
+```
+
+</CodeGroup>
+
+### createMediaListCombined()
+
+Creates a unified list combining network media and local-only files.
+
+```java
+public List<Media> createMediaListCombined()
+```
+
+<ResponseField name="combinedList" type="List<Media>">
+  Combined list containing:
+  - All network media items
+  - Local files not present in network collection
+</ResponseField>
+
+### Behavior
+
+1. Starts with all network media
+2. Scans local download directory
+3. For each local file:
+   - If filename matches network media: skip (already in list)
+   - If filename not in network: add as local-only media with:
+     - `id = 0`
+     - `userId = -1`
+     - `downloadedFromUrl = "Unknown"`
+
+### Code Example
+
+<CodeGroup>
+
+```java Display Combined List
+MediaService service = new MediaService();
+List<Media> combined = service.createMediaListCombined();
+
+for (Media media : combined) {
+    String source = media.userId == -1 ? "Local" : "Network";
+    System.out.printf("%s [%s] - ID: %d%n", 
+        media.mediaFileName, 
+        source, 
+        media.id);
+}
+```
+
+```java Separate Network vs Local
+List<Media> combined = service.createMediaListCombined();
+
+List<Media> networkOnly = combined.stream()
+    .filter(m -> m.userId != -1)
+    .toList();
+
+List<Media> localOnly = combined.stream()
+    .filter(m -> m.userId == -1)
+    .toList();
+
+System.out.println("Network: " + networkOnly.size());
+System.out.println("Local only: " + localOnly.size());
+```
+
+```java Sync Status Check
+List<Media> combined = service.createMediaListCombined();
+
+long orphanedFiles = combined.stream()
+    .filter(m -> m.downloadedFromUrl.equals("Unknown"))
+    .count();
+
+if (orphanedFiles > 0) {
+    System.out.println("Warning: " + orphanedFiles + 
+        " local files not tracked by server");
+}
+```
+
+</CodeGroup>
+
+### filterMedia()
+
+Filters media list by filename substring.
+
+```java
+public List<Media> filterMedia(String textField, List<Media> listMedia)
+```
+
+<ParamField path="textField" type="String" required>
+  Search query string (case-insensitive)
+</ParamField>
+
+<ParamField path="listMedia" type="List<Media>" required>
+  Media list to filter
+</ParamField>
+
+<ResponseField name="filtered" type="List<Media>">
+  Media items where filename contains the search string
+</ResponseField>
+
+### Behavior
+
+- Case-insensitive search
+- Matches substrings in `mediaFileName`
+- Skips null media items
+- Skips items with null filenames
+
+### Code Example
+
+<CodeGroup>
+
+```java Search Implementation
+MediaService service = new MediaService();
+List<Media> allMedia = service.createMediaListCombined();
+
+String searchQuery = "tutorial";
+List<Media> results = service.filterMedia(searchQuery, allMedia);
+
+System.out.println("Found " + results.size() + " matches for: " + searchQuery);
+for (Media media : results) {
+    System.out.println("  " + media.mediaFileName);
+}
+```
+
+```java Live Search Field
+JTextField searchField = new JTextField();
+JList<Media> mediaList = new JList<>();
+DefaultListModel<Media> listModel = new DefaultListModel<>();
+
+searchField.getDocument().addDocumentListener(new DocumentListener() {
+    @Override
+    public void insertUpdate(DocumentEvent e) { updateList(); }
+    
+    @Override
+    public void removeUpdate(DocumentEvent e) { updateList(); }
+    
+    @Override
+    public void changedUpdate(DocumentEvent e) { updateList(); }
+    
+    private void updateList() {
+        String query = searchField.getText();
+        List<Media> allMedia = service.createMediaListCombined();
+        List<Media> filtered = service.filterMedia(query, allMedia);
+        
+        listModel.clear();
+        filtered.forEach(listModel::addElement);
+    }
+});
+```
+
+```java Multi-Criteria Filter
+public List<Media> advancedFilter(String query, String fileType) {
+    MediaService service = new MediaService();
+    List<Media> combined = service.createMediaListCombined();
+    
+    // First filter by query
+    List<Media> nameFiltered = service.filterMedia(query, combined);
+    
+    // Then filter by file type
+    return nameFiltered.stream()
+        .filter(m -> m.mediaFileName.toLowerCase().endsWith(fileType))
+        .toList();
+}
+
+// Usage
+List<Media> mp4Videos = advancedFilter("music", ".mp4");
+```
+
+</CodeGroup>
+
+## Media Object Properties
+
+The `Media` class (from `MediaSyncPolling` package) has these key fields:
+
+<ResponseField name="id" type="int">
+  Unique media ID (0 for local-only files)
+</ResponseField>
+
+<ResponseField name="mediaFileName" type="String">
+  Filename with extension
+</ResponseField>
+
+<ResponseField name="userId" type="int">
+  User who uploaded/owns the media (-1 for local-only files)
+</ResponseField>
+
+<ResponseField name="downloadedFromUrl" type="String">
+  Original source URL ("Unknown" for local-only files)
+</ResponseField>
+
+## Common Use Cases
+
+### REST API Integration
+
+```java
+public class MediaSyncService {
+    private final MediaService mediaService;
+    private final RestTemplate restClient;
+    
+    public void syncWithServer() throws Exception {
+        // Fetch from REST API
+        Media[] response = restClient.getForObject(
+            "https://api.example.com/media",
+            Media[].class
+        );
+        
+        mediaService.addNewMediaNetwork(Arrays.asList(response));
+    }
+    
+    public List<Media> getAllMedia() {
+        return mediaService.createMediaListCombined();
+    }
+}
+```
+
+### Table Model Integration
+
+```java
+public class MediaTableModel extends AbstractTableModel {
+    private final MediaService service;
+    private List<Media> displayedMedia;
+    
+    public void refresh() {
+        displayedMedia = service.createMediaListCombined();
+        fireTableDataChanged();
+    }
+    
+    public void search(String query) {
+        List<Media> allMedia = service.createMediaListCombined();
+        displayedMedia = service.filterMedia(query, allMedia);
+        fireTableDataChanged();
+    }
+}
+```
+
+## Thread Safety
+
+The `MediaService` class is **not thread-safe**. For concurrent access:
+
+```java
+public class ThreadSafeMediaService {
+    private final MediaService delegate = new MediaService();
+    private final Lock lock = new ReentrantLock();
+    
+    public void addNewMediaNetwork(List<Media> media) {
+        lock.lock();
+        try {
+            delegate.addNewMediaNetwork(media);
+        } finally {
+            lock.unlock();
+        }
+    }
+    
+    public List<Media> getNetworkMediaAll() {
+        lock.lock();
+        try {
+            return delegate.getNetworkMediaAll();
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+## Related Classes
+
+- `Media`: Media entity from MediaSyncPolling package
+- `MediaLibrary`: For scanning local media files
+- `DownloadController`: For downloading media from URLs

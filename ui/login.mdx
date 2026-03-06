@@ -1,0 +1,430 @@
+---
+title: "Login Panel"
+description: "Authentication interface with email/password fields, token storage, and remember me functionality"
+---
+
+## Overview
+
+The `Login` class (Login.java:32) provides the authentication interface for ViewTool. It features a clean, centered form layout with email and password fields, a "remember me" checkbox, and automatic token management.
+
+## Layout Architecture
+
+The login panel uses a BorderLayout with a centered GridBagLayout form:
+
+```java
+public Login(ViewToolApp jframe) {
+    this.tokenService = jframe.getTokenService();
+    setLayout(new BorderLayout());
+    setName("Login");
+    setBorder(new EmptyBorder(20, 20, 20, 20));
+    
+    JPanel formPanel = new JPanel(new GridBagLayout());
+    GridBagConstraints gbc = new GridBagConstraints();
+    gbc.insets = new Insets(5, 5, 5, 5);
+    gbc.fill = GridBagConstraints.HORIZONTAL;
+    
+    add(formPanel, BorderLayout.CENTER);
+}
+```
+
+Login.java:46-58
+
+<Note>
+The 20-pixel EmptyBorder provides uniform spacing around the entire panel, creating visual breathing room.
+</Note>
+
+## Form Components
+
+### Email Field
+
+**Label**: "Email:" with email icon (correoicon.png, 25x25)
+
+```java
+labelEmail = new JLabel("Email:");
+ImageIcon emailIcon = new ImageIcon(
+    getClass().getResource("/images/correoicon.png"));
+Image emailimg = emailIcon.getImage()
+    .getScaledInstance(25, 25, Image.SCALE_SMOOTH);
+labelEmail.setIcon(new ImageIcon(emailimg));
+labelEmail.setHorizontalAlignment(SwingConstants.RIGHT);
+
+fieldEmail = new JTextField(15);
+```
+
+Login.java:60-76
+
+**Grid Position**: 
+- Label: (0, 0) - left column, first row
+- Field: (1, 0) - right column, first row
+
+### Password Field
+
+**Label**: "Pass:" with password icon (passwordicon.png, 30x25)
+
+```java
+labelPassword = new JLabel("Pass:");
+ImageIcon passwordIcon = new ImageIcon(
+    getClass().getResource("/images/passwordicon.png"));
+Image passimg = passwordIcon.getImage()
+    .getScaledInstance(30, 25, Image.SCALE_SMOOTH);
+labelPassword.setIcon(new ImageIcon(passimg));
+labelPassword.setHorizontalAlignment(SwingConstants.RIGHT);
+
+fieldPassword = new JPasswordField(15);
+```
+
+Login.java:78-94
+
+**Grid Position**:
+- Label: (0, 1) - left column, second row
+- Field: (1, 1) - right column, second row
+
+<Info>
+Both labels use `SwingConstants.RIGHT` alignment to ensure icons and text align properly with the input fields.
+</Info>
+
+### Remember Me Checkbox
+
+```java
+checkBoxRemember = new JCheckBox("Remember me");
+checkBoxRemember.setFont(new Font("Segoe UI", java.awt.Font.PLAIN, 13));
+```
+
+Login.java:96-102
+
+**Grid Position**: (1, 2) - right column, third row
+
+The checkbox includes an action listener that changes font weight:
+
+```java
+checkBoxRemember.addActionListener(new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        if (checkBoxRemember.isSelected()) {
+            checkBoxRemember.setFont(UIUtils.BOLD_FONT);
+        } else {
+            checkBoxRemember.setFont(UIUtils.PLAIN_FONT);
+        }
+    }
+});
+```
+
+Login.java:135-144
+
+<Tip>
+The font weight change provides immediate visual feedback when the user toggles the remember me option.
+</Tip>
+
+### Login Button
+
+```java
+buttonLogin = new JButton("Login");
+buttonLogin.setBackground(java.awt.Color.lightGray);
+buttonLogin.setForeground(java.awt.Color.BLACK);
+utils.setHoverButton(buttonLogin);
+
+gbc.gridx = 1;
+gbc.gridy = 3;
+gbc.insets = new Insets(15, 5, 5, 5);
+formPanel.add(buttonLogin, gbc);
+```
+
+Login.java:104-116
+
+**Grid Position**: (1, 3) - right column, fourth row
+
+**Styling**:
+- Light gray background
+- Black text
+- Hover effect via UIUtils
+- Extra top margin (15px) for visual separation
+
+### Feedback Labels
+
+**Info Label**: Displays error/success messages
+
+```java
+infoLabel = new JLabel("");
+gbc.gridx = 0;
+gbc.gridy = 4;
+gbc.gridwidth = 2;
+gbc.fill = GridBagConstraints.CENTER;
+formPanel.add(infoLabel, gbc);
+```
+
+Login.java:118-123
+
+**Space Label**: Provides vertical spacing
+
+```java
+spaceLabel = new JLabel("");
+gbc.gridx = 0;
+gbc.gridy = 5;
+formPanel.add(spaceLabel, gbc);
+```
+
+Login.java:125-128
+
+## Authentication Flow
+
+### Login Process
+
+When the user clicks the Login button:
+
+1. **Input Validation**: Check for empty fields
+2. **API Authentication**: Call MediaSyncPolling.login()
+3. **Token Management**: Store token if authentication succeeds
+4. **Session State**: Update logged-in status
+5. **Token Persistence**: Save token if "Remember me" is checked
+6. **Navigation**: Redirect to main interface
+
+```java
+buttonLogin.addActionListener(new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        String email = fieldEmail.getText();
+        String password = new String(fieldPassword.getPassword());
+        boolean remember = checkBoxRemember.isSelected();
+        
+        MediaSyncPolling mediaSyncPolling = jframe.getComponent();
+        
+        if (email.isBlank() || password.isBlank()) {
+            utils.showFeedback(infoLabel, "Can't be empty.", true);
+            return;
+        }
+        
+        try {
+            token = mediaSyncPolling.login(email, password);
+        } catch (Exception ex) {
+            utils.showFeedback(infoLabel, 
+                "Email or password not found.", true);
+            return;
+        }
+        
+        if (token != null) {
+            tokenService.setToken(token);
+            jframe.setLoggedIn(true);
+        }
+        
+        if (remember && token != null) {
+            tokenService.saveToken(token);
+        }
+        
+        jframe.loggedSuccess(token);
+    }
+});
+```
+
+Login.java:146-184
+
+### Input Validation
+
+Before attempting authentication, the form validates:
+
+- **Email field is not blank**: `email.isBlank()`
+- **Password field is not blank**: `password.isBlank()`
+
+```java
+if (email.isBlank() || password.isBlank()) {
+    utils.showFeedback(infoLabel, "Can't be empty.", true);
+    return;
+}
+```
+
+Login.java:157-160
+
+<Note>
+The feedback parameter `true` indicates an error state, which typically displays the message in red or with an error icon.
+</Note>
+
+### Error Handling
+
+If authentication fails:
+
+```java
+try {
+    token = mediaSyncPolling.login(email, password);
+} catch (Exception ex) {
+    utils.showFeedback(infoLabel, "Email or password not found.", true);
+    return;
+}
+```
+
+Login.java:162-167
+
+**Possible error scenarios**:
+- Invalid credentials
+- Network connection failure
+- API unavailable
+- Malformed response
+
+## Token Management
+
+### In-Memory Token
+
+The token is always stored in memory for the current session:
+
+```java
+if (token != null) {
+    tokenService.setToken(token);
+    jframe.setLoggedIn(true);
+}
+```
+
+Login.java:168-172
+
+### Persistent Token Storage
+
+If "Remember me" is checked, the token is persisted to disk:
+
+```java
+if (remember && token != null) {
+    tokenService.saveToken(token);
+}
+```
+
+Login.java:175-178
+
+<Info>
+The TokenService handles secure token storage using Java preferences or file-based persistence. This allows users to remain logged in across application restarts.
+</Info>
+
+## Post-Login Navigation
+
+After successful authentication:
+
+```java
+jframe.loggedSuccess(token);
+```
+
+Login.java:180
+
+This method in ViewToolApp:
+1. Stores the token
+2. Sets `loggedIn = true`
+3. Displays the main interface with management panel
+4. Shows the settings button
+
+## UI Feedback
+
+The login form provides visual feedback using `UIUtils.showFeedback()`:
+
+| Scenario | Message | Error Flag |
+|----------|---------|------------|
+| Empty fields | "Can't be empty." | true |
+| Invalid credentials | "Email or password not found." | true |
+| Successful login | (navigates away) | - |
+
+<Accordion title="How does showFeedback work?">
+The `UIUtils.showFeedback()` method:
+- Updates the info label text
+- Applies error styling (red text) if the error flag is true
+- May use a timer to auto-clear the message after a few seconds
+- Ensures the feedback is visible and attention-grabbing
+</Accordion>
+
+## Visual Design
+
+### Color Scheme
+
+- **Background**: White (inherited from global UI settings)
+- **Input fields**: Default system colors
+- **Button**: Light gray background, black text
+- **Labels**: Black text, Segoe UI font
+
+### Icons
+
+| Icon | Size | Purpose |
+|------|------|----------|
+| correoicon.png | 25x25 | Email field visual indicator |
+| passwordicon.png | 30x25 | Password field visual indicator |
+
+### Spacing
+
+- **Panel border**: 20px all sides
+- **Component insets**: 5px (default)
+- **Button top margin**: 15px (extra spacing before login button)
+
+## GridBagConstraints Configuration
+
+The form uses consistent constraints:
+
+```java
+GridBagConstraints gbc = new GridBagConstraints();
+gbc.insets = new Insets(5, 5, 5, 5);
+gbc.fill = GridBagConstraints.HORIZONTAL;
+```
+
+**Key properties**:
+- `insets`: 5px spacing between components
+- `fill`: HORIZONTAL - components expand to fill width
+- `weightx`: 0 for labels, 1.0 for input fields (allows fields to grow)
+
+<Tip>
+The GridBagLayout allows precise control over component positioning and sizing. Labels use `weightx = 0` to maintain their natural width, while fields use `weightx = 1.0` to expand and fill available space.
+</Tip>
+
+## Security Considerations
+
+### Password Field
+
+The form uses `JPasswordField` instead of `JTextField`:
+
+```java
+fieldPassword = new JPasswordField(15);
+```
+
+This ensures:
+- Characters are masked (displayed as dots/asterisks)
+- Password is stored as `char[]` not String
+- Can be cleared from memory after use
+
+### Password Extraction
+
+```java
+String password = new String(fieldPassword.getPassword());
+```
+
+Login.java:153
+
+<Note>
+While this creates a String (which is less secure than char[]), the password is immediately sent to the authentication API and not stored long-term in the application.
+</Note>
+
+## Best Practices
+
+<Tip>
+When extending or modifying the Login panel:
+- Always validate input before attempting authentication
+- Provide clear, user-friendly error messages
+- Never log or display the actual password
+- Clear sensitive data from memory after authentication
+- Use the TokenService for all token operations
+- Provide visual feedback for all user actions
+- Test with empty inputs, invalid credentials, and network failures
+</Tip>
+
+## Integration Points
+
+### ViewToolApp Integration
+
+```java
+public Login(ViewToolApp jframe) {
+    this.tokenService = jframe.getTokenService();
+    // ...
+}
+```
+
+The Login panel requires:
+- Reference to ViewToolApp for navigation
+- TokenService for token management
+- MediaSyncPolling component for authentication API
+
+### Services Used
+
+| Service | Purpose |
+|---------|----------|
+| TokenService | Token storage and retrieval |
+| MediaSyncPolling | Authentication API calls |
+| UIUtils | Visual feedback and styling |
+| ViewToolApp | Navigation and session management |

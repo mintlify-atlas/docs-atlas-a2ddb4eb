@@ -1,0 +1,369 @@
+---
+title: "PanelMain"
+description: "Download interface panel for downloading videos and audio from URLs using yt-dlp"
+---
+
+## Overview
+
+The `PanelMain` class extends `JPanel` and provides the main download interface for ViewTool. Users can enter a URL, select format (MP3/MP4), choose audio-only mode, and download media content to their local directory.
+
+<Note>
+This panel integrates with yt-dlp for downloading and uses SwingWorker for background processing to keep the UI responsive.
+</Note>
+
+## Class Structure
+
+### Package
+```java
+package martin.viewtool.ui;
+```
+
+### Inheritance
+```java
+public class PanelMain extends JPanel
+```
+
+## UI Components
+
+### Input Fields
+
+<ParamField path="textFieldURL" type="JTextField">
+  Text field for entering the video/audio URL (40 columns wide)
+</ParamField>
+
+<ParamField path="checkBoxOnlyAudio" type="JCheckBox">
+  Checkbox to enable audio-only download mode
+</ParamField>
+
+### Format Selection
+
+<ParamField path="buttonMP3" type="JRadioButton">
+  Radio button for selecting MP3 audio format
+</ParamField>
+
+<ParamField path="buttonMP4" type="JRadioButton">
+  Radio button for selecting MP4 video format (selected by default)
+</ParamField>
+
+### Action Buttons
+
+<ParamField path="buttonDownload" type="JButton">
+  Primary button that initiates the download process
+</ParamField>
+
+<ParamField path="buttonPlayVideo" type="JButton">
+  Button to open the last downloaded video/audio file
+</ParamField>
+
+### Status Indicators
+
+<ParamField path="progressBar" type="JProgressBar">
+  Progress bar (0-100) showing download progress with percentage display
+</ParamField>
+
+<ParamField path="infoLabel" type="JLabel">
+  Label for displaying status messages and feedback to the user
+</ParamField>
+
+### Icons
+
+<ParamField path="youtubeIcon" type="JLabel">
+  YouTube icon displayed next to URL label
+</ParamField>
+
+<ParamField path="audioIcon" type="JLabel">
+  Audio icon displayed next to MP3 option
+</ParamField>
+
+<ParamField path="videoIcon" type="JLabel">
+  Video icon displayed next to MP4 option
+</ParamField>
+
+## Services and Dependencies
+
+<ParamField path="prefService" type="PreferencesService">
+  Service for accessing user preferences (output directory, speed limit, yt-dlp path)
+</ParamField>
+
+<ParamField path="controller" type="DownloadController">
+  Controller that orchestrates the download process using YtDlpService
+</ParamField>
+
+<ParamField path="playService" type="PlayService">
+  Service for opening media files with the system's default player
+</ParamField>
+
+<ParamField path="utils" type="UIUtils">
+  Utility class for UI operations like icons, hover effects, and feedback messages
+</ParamField>
+
+## Constructor
+
+### PanelMain()
+
+```java
+public PanelMain()
+```
+
+Initializes the download panel:
+1. Calls `initComponents()` to build the UI layout
+2. Calls `setupEvents()` to attach event listeners
+
+<CodeGroup>
+```java Example
+PanelMain downloadPanel = new PanelMain();
+jframe.add(downloadPanel);
+```
+</CodeGroup>
+
+## Layout Methods
+
+### initComponents()
+
+```java
+private void initComponents()
+```
+
+Builds the panel layout using `GridBagLayout`:
+- **Row 0**: YouTube icon, URL label, text field, "Only Audio" checkbox
+- **Row 1**: Audio icon, MP3 button, video icon, MP4 button, Download button, Play button, info label
+- **Row 2**: Progress bar (625x20 pixels)
+
+All icons are loaded at 25x25 pixels. The layout uses FlowLayout for internal row panels to keep components horizontally aligned.
+
+<CodeGroup>
+```java Layout Structure
+setLayout(new GridBagLayout());
+GridBagConstraints gbc = new GridBagConstraints();
+gbc.insets = new Insets(10, 10, 10, 10);
+gbc.fill = GridBagConstraints.HORIZONTAL;
+```
+</CodeGroup>
+
+### groupButtons()
+
+```java
+private void groupButtons()
+```
+
+Groups MP3 and MP4 radio buttons using `ButtonGroup` to ensure only one can be selected at a time. Sets MP4 as the default selection.
+
+<CodeGroup>
+```java Button Grouping
+ButtonGroup formatGroup = new ButtonGroup();
+formatGroup.add(buttonMP3);
+formatGroup.add(buttonMP4);
+buttonMP4.setSelected(true);
+```
+</CodeGroup>
+
+## Event Handling
+
+### setupEvents()
+
+```java
+private void setupEvents()
+```
+
+Attaches all event listeners:
+1. Play Video button → `handlePlayVideo()`
+2. Download button → `handleDownload()`
+3. Only Audio checkbox → `checkBoxActionListener()`
+4. MP3/MP4 buttons → `checkMP3AndMP4Listener()`
+
+### checkBoxActionListener()
+
+```java
+private void checkBoxActionListener()
+```
+
+Listens to the "Only Audio" checkbox. When checked, makes the label text bold; when unchecked, returns to plain font.
+
+<CodeGroup>
+```java Font Toggle
+if (checkBoxOnlyAudio.isSelected()) {
+    labelOnlyAudio.setFont(UIUtils.BOLD_FONT);
+} else {
+    labelOnlyAudio.setFont(UIUtils.PLAIN_FONT);
+}
+```
+</CodeGroup>
+
+### checkMP3AndMP4Listener()
+
+```java
+private void checkMP3AndMP4Listener()
+```
+
+Listens to both radio buttons and updates their font weight:
+- Selected button: Bold font
+- Unselected button: Plain font
+
+## Core Functionality
+
+### handleDownload()
+
+```java
+private void handleDownload()
+```
+
+Executes the download process in a background thread using `SwingWorker<Integer, Integer>`:
+
+**Process Flow:**
+1. Disables download button
+2. Resets progress bar to 0
+3. Validates URL and speed limit
+4. Shows info alert: "The download is starting, please wait..."
+5. Starts download with selected format and options
+6. Updates progress bar as download proceeds
+7. On completion: shows success message or error feedback
+8. Re-enables download button
+
+<CodeGroup>
+```java Download Parameters
+controller.startDownload(
+    textFieldURL.getText(),
+    buttonMP3.isSelected() ? MediaFormat.MP3 : MediaFormat.MP4,
+    checkBoxOnlyAudio.isSelected(),
+    prefService.getOutputDir(),
+    log,
+    pct -> publish(pct), // Progress consumer
+    limit,
+    preferences.isM3USelected()
+);
+```
+</CodeGroup>
+
+**Progress Updates:**
+- Uses `publish()` to send progress percentage from background thread
+- `process()` method updates the progress bar on EDT
+- Switches from indeterminate to determinate when first percentage received
+
+**Error Handling:**
+- Invalid URL: Shows "Invalid URL." in info label
+- Download failure: Shows "Downloaded uncompleted. Try again."
+- Success: Shows "Download complete to [output directory]"
+
+<Note>
+The download operation uses yt-dlp under the hood. Make sure yt-dlp is installed and the path is configured in preferences.
+</Note>
+
+### handlePlayVideo()
+
+```java
+private void handlePlayVideo()
+```
+
+Opens the last downloaded file in a background thread using `SwingWorker<Void, Void>`:
+
+**Process Flow:**
+1. Calls `playService.playLastDownloaded()` with output directory
+2. On success: Shows "Opening..." feedback
+3. On error: Shows "You don't have videos yet." feedback
+
+<CodeGroup>
+```java Play Last Video
+SwingWorker<Void, Void> openFileWorker = new SwingWorker<>() {
+    @Override
+    protected Void doInBackground() throws Exception {
+        playService.playLastDownloaded(prefService.getOutputDir());
+        return null;
+    }
+
+    @Override
+    protected void done() {
+        try {
+            get();
+            utils.showFeedback(infoLabel, "Opening...", false);
+        } catch (InterruptedException | ExecutionException ex) {
+            utils.showFeedback(infoLabel, "You don't have videos yet.", true);
+        }
+    }
+};
+openFileWorker.execute();
+```
+</CodeGroup>
+
+## User Preferences Integration
+
+The panel reads several user preferences through `PreferencesService`:
+
+<ParamField path="outputDir" type="Path">
+  Directory where downloaded files are saved
+</ParamField>
+
+<ParamField path="ytDlpPath" type="String">
+  Path to the yt-dlp executable
+</ParamField>
+
+<ParamField path="limitSpeed" type="String">
+  Download speed limit (e.g., "1M" for 1 MB/s)
+</ParamField>
+
+<ParamField path="isM3USelected" type="boolean">
+  Whether to use M3U format for playlists
+</ParamField>
+
+## Visual Feedback
+
+The panel provides multiple forms of user feedback:
+
+### Progress Indication
+- Progress bar shows download percentage (0-100%)
+- String painted on progress bar shows numeric percentage
+
+### Status Messages
+- Info label displays transient messages
+- Uses `UIUtils.showFeedback()` for temporary colored messages
+- Error messages displayed in error color
+- Success messages displayed in normal color
+
+### Button States
+- Download button disabled during download
+- Hover effects applied to Download and Play buttons
+- Radio buttons use bold font when selected
+
+## Icons and Styling
+
+All icons are loaded at fixed sizes:
+
+```java
+audioIcon.setIcon(utils.getFixedSizeIcon("audioicon.png", 25, 25));
+videoIcon.setIcon(utils.getFixedSizeIcon("videoicon.png", 25, 25));
+youtubeIcon.setIcon(utils.getFixedSizeIcon("youtubeicon.png", 25, 25));
+```
+
+Buttons receive hover effects:
+```java
+utils.setHoverButton(buttonDownload);
+utils.setHoverButton(buttonPlayVideo);
+```
+
+## Threading Model
+
+The panel uses proper threading to maintain UI responsiveness:
+
+<Note>
+**Important**: All long-running operations (download, file opening) run in SwingWorker background threads, never blocking the Event Dispatch Thread (EDT).
+</Note>
+
+### Download Thread
+- Type: `SwingWorker<Integer, Integer>`
+- Background task: `doInBackground()` runs download
+- Progress updates: `process()` updates UI
+- Completion: `done()` shows final message
+
+### Play Thread
+- Type: `SwingWorker<Void, Void>`
+- Background task: Opens file with system player
+- Completion: Shows success or error feedback
+
+## Related Classes
+
+- `DownloadController`: Orchestrates download logic
+- `YtDlpService`: Wrapper for yt-dlp executable
+- `PreferencesService`: User preferences storage
+- `PlayService`: Opens media files
+- `UIUtils`: UI helper methods
+- `MediaFormat`: Enum for MP3/MP4 formats
+- `Alerts`: Dialog utility class

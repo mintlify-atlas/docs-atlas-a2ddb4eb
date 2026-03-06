@@ -1,97 +1,119 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "ViewTool Documentation"
+description: "Desktop application for downloading and managing multimedia content using yt-dlp"
 ---
 
-## Setting up
+<div style={{
+  background: 'linear-gradient(135deg, #418f45 0%, #9ac0a4 100%)',
+  padding: '60px 40px',
+  borderRadius: '8px',
+  marginBottom: '40px',
+  color: 'white'
+}}>
+  <h1 style={{ fontSize: '48px', fontWeight: '700', marginBottom: '20px', color: 'white' }}>
+    ViewTool
+  </h1>
+  <p style={{ fontSize: '20px', marginBottom: '30px', color: 'rgba(255,255,255,0.95)' }}>
+    A powerful Java Swing desktop application for downloading and managing multimedia content from YouTube using yt-dlp, with cloud synchronization capabilities.
+  </p>
+  <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+    <a href="/quickstart" style={{
+      background: '#ffffff',
+      color: '#418f45',
+      padding: '12px 24px',
+      borderRadius: '4px',
+      textDecoration: 'none',
+      fontWeight: '600',
+      display: 'inline-block'
+    }}>
+      Get Started →
+    </a>
+    <a href="https://github.com/cesarmartin2025/ViewTool" style={{
+      background: 'rgba(255,255,255,0.2)',
+      color: '#ffffff',
+      padding: '12px 24px',
+      borderRadius: '4px',
+      textDecoration: 'none',
+      fontWeight: '600',
+      display: 'inline-block',
+      border: '2px solid rgba(255,255,255,0.5)'
+    }}>
+      View on GitHub
+    </a>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## Key Features
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="YouTube Downloads" icon="download" href="/features/downloading">
+    Download videos and audio from YouTube with flexible format options (MP3, MP4, M4A)
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Media Library" icon="folder-open" href="/features/media-library">
+    Manage your downloaded content with filtering, search, and organization tools
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Network Sync" icon="cloud" href="/features/network-sync">
+    Synchronize your media library with DI Media Network for cloud access
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="User Interface" icon="window" href="/ui/main-window">
+    Clean, intuitive Swing-based interface with real-time progress tracking
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Start
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Install Requirements">
+    Ensure you have Java 17+ and download yt-dlp and FFmpeg binaries
+  </Step>
+  <Step title="Configure Paths">
+    Set up the paths to yt-dlp.exe and your preferred download directory
+  </Step>
+  <Step title="Start Downloading">
+    Paste a YouTube URL, select your format, and start downloading
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Perfect For
 
-## Need inspiration?
+<CardGroup cols={3}>
+  <Card title="Content Creators" icon="video">
+    Download reference materials and maintain an organized media library
+  </Card>
+  <Card title="Students" icon="graduation-cap">
+    Save educational videos and lectures for offline study
+  </Card>
+  <Card title="Developers" icon="code">
+    Learn from the codebase - a complete Java Swing desktop application
+  </Card>
+</CardGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Documentation Structure
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/introduction">
+    Learn about ViewTool and get up and running quickly
+  </Card>
+  <Card title="Core Features" icon="star" href="/features/downloading">
+    Explore downloading, library management, and network sync
+  </Card>
+  <Card title="User Interface" icon="desktop" href="/ui/main-window">
+    Understand the main window, panels, and navigation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/yt-dlp-service">
+    Dive into the core services, components, and utilities
+  </Card>
+</CardGroup>
+
+## Technical Highlights
+
+- **Java Swing UI**: Modern desktop interface with retro aesthetic
+- **yt-dlp Integration**: Powerful command-line downloader with full control
+- **FFmpeg Support**: Audio extraction and format conversion
+- **Network API**: REST integration with DI Media Network
+- **Event-Driven**: Custom event system for real-time updates
+- **Media Management**: Scan, filter, and organize local files
+
+<Note>
+  ViewTool is an educational project developed for the DAM (Desarrollo de Aplicaciones Multiplataforma) program, demonstrating interface design principles and Java desktop development.
+</Note>

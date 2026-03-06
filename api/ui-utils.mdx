@@ -1,0 +1,271 @@
+---
+title: 'UIUtils'
+description: 'Utility class for common Swing UI operations including icon loading, feedback messages, and button hover effects'
+---
+
+## Overview
+
+The `UIUtils` class provides utility methods for common Swing UI operations in the ViewTool application, including icon loading with scaling, user feedback display, and interactive button behaviors.
+
+**Package:** `martin.viewtool.utils`
+
+## Constants
+
+### BOLD_FONT
+
+Predefined bold font for UI components.
+
+```java
+public static final Font BOLD_FONT = new Font("Segoe UI", Font.BOLD, 13)
+```
+
+### PLAIN_FONT
+
+Predefined plain font for UI components.
+
+```java
+public static final Font PLAIN_FONT = new Font("Segoe UI", Font.PLAIN, 13)
+```
+
+**Example:**
+
+```java
+JLabel label = new JLabel("Settings");
+label.setFont(UIUtils.BOLD_FONT);
+
+JTextField field = new JTextField();
+field.setFont(UIUtils.PLAIN_FONT);
+```
+
+## Methods
+
+### getFixedSizeIcon
+
+Loads an icon from the resources directory and scales it to the specified dimensions.
+
+```java
+public ImageIcon getFixedSizeIcon(String imageName, int ancho, int alto)
+```
+
+<ParamField path="imageName" type="String">
+  The filename of the image (e.g., "download.png"). The file should be located in `/images/` resources folder
+</ParamField>
+
+<ParamField path="ancho" type="int">
+  The desired width in pixels (Spanish: ancho = width)
+</ParamField>
+
+<ParamField path="alto" type="int">
+  The desired height in pixels (Spanish: alto = height)
+</ParamField>
+
+<ResponseField name="returns" type="ImageIcon">
+  A scaled ImageIcon with the specified dimensions using smooth scaling
+</ResponseField>
+
+**Behavior:**
+
+- Loads image from `/images/{imageName}` resource path
+- Uses `Image.SCALE_SMOOTH` for high-quality scaling
+- Creates a new ImageIcon with the scaled image
+
+**Example:**
+
+<CodeGroup>
+```java Button Icon
+UIUtils uiUtils = new UIUtils();
+ImageIcon downloadIcon = uiUtils.getFixedSizeIcon("download.png", 24, 24);
+JButton downloadBtn = new JButton("Download", downloadIcon);
+```
+
+```java Multiple Sizes
+UIUtils uiUtils = new UIUtils();
+
+// Small icon for toolbar
+ImageIcon smallIcon = uiUtils.getFixedSizeIcon("settings.png", 16, 16);
+toolbarButton.setIcon(smallIcon);
+
+// Large icon for main panel
+ImageIcon largeIcon = uiUtils.getFixedSizeIcon("settings.png", 48, 48);
+mainLabel.setIcon(largeIcon);
+```
+</CodeGroup>
+
+### showFeedback
+
+Displays a temporary feedback message in a JLabel with automatic dismissal after 5 seconds.
+
+```java
+public void showFeedback(JLabel infoLabel, String message, boolean isError)
+```
+
+<ParamField path="infoLabel" type="JLabel">
+  The label component where the feedback message will be displayed
+</ParamField>
+
+<ParamField path="message" type="String">
+  The feedback text to display to the user
+</ParamField>
+
+<ParamField path="isError" type="boolean">
+  If `true`, displays message in red; if `false`, displays in black
+</ParamField>
+
+**Behavior:**
+
+- Sets label foreground color based on `isError` (red for errors, black for success)
+- Displays the message immediately
+- Automatically clears the message after 5000ms (5 seconds)
+- Only clears if the message hasn't been replaced by another message
+- Timer does not repeat
+
+**Example:**
+
+<CodeGroup>
+```java Success Message
+UIUtils uiUtils = new UIUtils();
+JLabel feedbackLabel = new JLabel();
+
+// Show success message
+uiUtils.showFeedback(feedbackLabel, "Download completed successfully", false);
+// Message appears in black and clears after 5 seconds
+```
+
+```java Error Message
+UIUtils uiUtils = new UIUtils();
+JLabel feedbackLabel = new JLabel();
+
+// Show error message
+uiUtils.showFeedback(feedbackLabel, "Invalid URL format", true);
+// Message appears in red and clears after 5 seconds
+```
+
+```java In Form Validation
+private final UIUtils uiUtils = new UIUtils();
+private JLabel statusLabel;
+
+public void onSubmit() {
+    try {
+        String url = urlField.getText();
+        ValidationService.requireValidUrl(url);
+        
+        // Validation passed
+        uiUtils.showFeedback(statusLabel, "Starting download...", false);
+        startDownload(url);
+    } catch (IllegalArgumentException ex) {
+        // Validation failed
+        uiUtils.showFeedback(statusLabel, ex.getMessage(), true);
+    }
+}
+```
+</CodeGroup>
+
+### setHoverButton
+
+Configures a button to display a hand cursor on mouse hover.
+
+```java
+public void setHoverButton(JButton button)
+```
+
+<ParamField path="button" type="JButton">
+  The button to configure with hover effects
+</ParamField>
+
+**Behavior:**
+
+- Adds a MouseAdapter to the button
+- Changes cursor to hand cursor (`HAND_CURSOR`) on mouse enter
+- Maintains hand cursor on mouse exit (note: this appears to be intentional behavior)
+
+**Example:**
+
+<CodeGroup>
+```java Single Button
+UIUtils uiUtils = new UIUtils();
+JButton submitBtn = new JButton("Submit");
+uiUtils.setHoverButton(submitBtn);
+```
+
+```java Multiple Buttons
+UIUtils uiUtils = new UIUtils();
+
+JButton downloadBtn = new JButton("Download");
+JButton cancelBtn = new JButton("Cancel");
+JButton settingsBtn = new JButton("Settings");
+
+uiUtils.setHoverButton(downloadBtn);
+uiUtils.setHoverButton(cancelBtn);
+uiUtils.setHoverButton(settingsBtn);
+```
+
+```java In Panel Setup
+private final UIUtils uiUtils = new UIUtils();
+
+private void initializeComponents() {
+    JButton primaryBtn = new JButton("Download");
+    primaryBtn.setFont(UIUtils.BOLD_FONT);
+    uiUtils.setHoverButton(primaryBtn);
+    
+    JButton secondaryBtn = new JButton("Cancel");
+    secondaryBtn.setFont(UIUtils.PLAIN_FONT);
+    uiUtils.setHoverButton(secondaryBtn);
+}
+```
+</CodeGroup>
+
+## Complete Usage Example
+
+```java
+public class DownloadPanel extends JPanel {
+    private final UIUtils uiUtils = new UIUtils();
+    private JLabel statusLabel;
+    private JButton downloadBtn;
+    private JTextField urlField;
+    
+    public DownloadPanel() {
+        initializeUI();
+    }
+    
+    private void initializeUI() {
+        // Create status label for feedback
+        statusLabel = new JLabel();
+        statusLabel.setFont(UIUtils.PLAIN_FONT);
+        
+        // Create download button with icon and hover effect
+        ImageIcon icon = uiUtils.getFixedSizeIcon("download.png", 20, 20);
+        downloadBtn = new JButton("Download", icon);
+        downloadBtn.setFont(UIUtils.BOLD_FONT);
+        uiUtils.setHoverButton(downloadBtn);
+        
+        // Add action listener
+        downloadBtn.addActionListener(e -> handleDownload());
+        
+        // Layout components
+        add(urlField);
+        add(downloadBtn);
+        add(statusLabel);
+    }
+    
+    private void handleDownload() {
+        try {
+            String url = urlField.getText();
+            ValidationService.requireValidUrl(url);
+            
+            uiUtils.showFeedback(statusLabel, "Download started", false);
+            // Start download...
+        } catch (IllegalArgumentException ex) {
+            uiUtils.showFeedback(statusLabel, "Invalid URL: " + ex.getMessage(), true);
+        }
+    }
+}
+```
+
+## Implementation Notes
+
+- Instance methods require creating a `UIUtils` object
+- Icon loading uses classpath resource loading via `UIUtils.class.getResource()`
+- All images must be placed in the `/images/` resources directory
+- Feedback timer is non-repeating and self-cleaning
+- Cursor behavior maintains hand cursor even after mouse exit (may be intentional for clickable areas)
+- Uses Segoe UI font family for consistent Windows-style appearance

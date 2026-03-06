@@ -1,0 +1,306 @@
+---
+title: Installation
+description: Complete guide to installing ViewTool and its dependencies including Java 17, yt-dlp, and FFmpeg
+---
+
+# Installation Guide
+
+This guide walks you through setting up ViewTool and all required dependencies on your system. ViewTool has been tested on **Windows 10** but should work on any platform that supports Java 17+.
+
+<Note>
+  Installation typically takes 10-15 minutes depending on your internet connection and system configuration.
+</Note>
+
+## Prerequisites
+
+Before installing ViewTool, ensure your system meets these requirements:
+
+- **Operating System**: Windows 10 or higher (tested), macOS, or Linux
+- **Memory**: At least 512 MB RAM available
+- **Disk Space**: 100 MB for application and dependencies
+- **Internet Connection**: Required for downloading videos
+
+## Step 1: Install Java 17 or Higher
+
+ViewTool requires **Java 17** or a newer version to run.
+
+<Steps>
+  <Step title="Check Existing Java Installation">
+    Open a terminal or command prompt and check if Java is already installed:
+    
+    ```bash
+    java -version
+    ```
+    
+    If you see output like `java version "17.0.x"` or higher, you can skip to Step 2.
+  </Step>
+  
+  <Step title="Download Java 17">
+    If Java is not installed or the version is below 17, download it from one of these sources:
+    
+    - **Oracle JDK**: [https://www.oracle.com/java/technologies/downloads/](https://www.oracle.com/java/technologies/downloads/)
+    - **OpenJDK**: [https://adoptium.net/](https://adoptium.net/) (recommended for open-source preference)
+    - **Amazon Corretto**: [https://aws.amazon.com/corretto/](https://aws.amazon.com/corretto/)
+  </Step>
+  
+  <Step title="Install Java">
+    Run the installer and follow the on-screen instructions. Make sure to:
+    
+    - Accept the license agreement
+    - Choose a memorable installation directory
+    - Allow the installer to set the `JAVA_HOME` environment variable
+  </Step>
+  
+  <Step title="Verify Installation">
+    Open a new terminal window and verify the installation:
+    
+    ```bash
+    java -version
+    javac -version
+    ```
+    
+    Both commands should report version 17 or higher.
+  </Step>
+</Steps>
+
+## Step 2: Install yt-dlp
+
+**yt-dlp** is the core download engine that ViewTool uses to fetch videos from YouTube and other platforms.
+
+<Steps>
+  <Step title="Download yt-dlp">
+    Download the latest version from the official repository:
+    
+    **Windows**:
+    - Visit [https://github.com/yt-dlp/yt-dlp/releases](https://github.com/yt-dlp/yt-dlp/releases)
+    - Download `yt-dlp.exe` from the latest release
+    
+    **macOS/Linux**:
+    ```bash
+    sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+    sudo chmod a+rx /usr/local/bin/yt-dlp
+    ```
+  </Step>
+  
+  <Step title="Place in Accessible Location">
+    **Windows**:
+    - Create a directory like `C:\Program Files\yt-dlp\`
+    - Move `yt-dlp.exe` to this directory
+    - Add this directory to your system PATH:
+      1. Open System Properties → Environment Variables
+      2. Edit the `Path` variable
+      3. Add `C:\Program Files\yt-dlp\`
+    
+    **macOS/Linux**:
+    The previous step already placed it in `/usr/local/bin/` which is typically in PATH.
+  </Step>
+  
+  <Step title="Verify Installation">
+    Open a new terminal and test yt-dlp:
+    
+    ```bash
+    yt-dlp --version
+    ```
+    
+    You should see the version number printed.
+  </Step>
+</Steps>
+
+<Warning>
+  ViewTool needs to know where `yt-dlp.exe` is located. You'll configure this path in the Preferences panel after first launch.
+</Warning>
+
+## Step 3: Install FFmpeg
+
+**FFmpeg** is required for audio extraction and format conversion.
+
+<Steps>
+  <Step title="Download FFmpeg">
+    **Windows**:
+    - Visit [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+    - Download a Windows build (recommended: [gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/))
+    - Choose the `ffmpeg-release-essentials.zip` file
+    
+    **macOS** (using Homebrew):
+    ```bash
+    brew install ffmpeg
+    ```
+    
+    **Linux** (Ubuntu/Debian):
+    ```bash
+    sudo apt update
+    sudo apt install ffmpeg
+    ```
+  </Step>
+  
+  <Step title="Extract and Configure (Windows)">
+    1. Extract the downloaded ZIP file
+    2. Move the extracted folder to `C:\Program Files\ffmpeg\`
+    3. Add `C:\Program Files\ffmpeg\bin\` to your system PATH:
+       - Open System Properties → Environment Variables
+       - Edit the `Path` variable
+       - Add `C:\Program Files\ffmpeg\bin\`
+  </Step>
+  
+  <Step title="Verify Installation">
+    Open a new terminal and verify FFmpeg is accessible:
+    
+    ```bash
+    ffmpeg -version
+    ```
+    
+    You should see detailed version information.
+  </Step>
+</Steps>
+
+## Step 4: Download ViewTool
+
+<Steps>
+  <Step title="Get the JAR File">
+    Download the latest `ViewTool.jar` from your distribution source or build it from source.
+  </Step>
+  
+  <Step title="Choose Installation Directory">
+    Create a directory for ViewTool:
+    
+    ```bash Windows
+    mkdir C:\Program Files\ViewTool
+    ```
+    
+    ```bash macOS/Linux
+    mkdir ~/Applications/ViewTool
+    ```
+    
+    Move `ViewTool.jar` into this directory.
+  </Step>
+  
+  <Step title="Create Desktop Shortcut (Optional)">
+    **Windows**:
+    - Right-click on desktop → New → Shortcut
+    - Target: `"C:\Program Files\Java\jdk-17\bin\javaw.exe" -jar "C:\Program Files\ViewTool\ViewTool.jar"`
+    - Name it "ViewTool"
+    
+    **macOS**:
+    Create an AppleScript or Automator app that runs:
+    ```bash
+    java -jar ~/Applications/ViewTool/ViewTool.jar
+    ```
+  </Step>
+</Steps>
+
+## Step 5: First Launch
+
+<Steps>
+  <Step title="Launch ViewTool">
+    Open a terminal in the ViewTool directory and run:
+    
+    ```bash
+    java -jar ViewTool.jar
+    ```
+    
+    Alternatively, if you have a main class:
+    ```bash
+    java -cp ViewTool.jar martin.viewtool.ui.ViewToolApp
+    ```
+  </Step>
+  
+  <Step title="Login Screen">
+    On first launch, you'll see the login screen for DI Media Network integration.
+    
+    <Note>
+      If you don't have network credentials, you can still use ViewTool for local downloads. Contact your system administrator for network access.
+    </Note>
+  </Step>
+  
+  <Step title="Configure Preferences">
+    After login, go to **Edit → Preferences** to configure:
+    
+    - **yt-dlp Path**: Point to where you installed `yt-dlp.exe`
+    - **Output Directory**: Where downloaded files will be saved (default: user's Downloads folder)
+    - **Speed Limit**: Optional bandwidth throttling (e.g., "1M" for 1 MB/s)
+    - **Create .m3u Files**: Enable for playlist downloads
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Java Not Found
+
+<CodeGroup>
+```bash Windows
+# Verify JAVA_HOME is set
+echo %JAVA_HOME%
+
+# If empty, set it manually
+setx JAVA_HOME "C:\Program Files\Java\jdk-17"
+setx PATH "%PATH%;%JAVA_HOME%\bin"
+```
+
+```bash macOS/Linux
+# Verify JAVA_HOME
+echo $JAVA_HOME
+
+# Add to ~/.bashrc or ~/.zshrc
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+export PATH=$PATH:$JAVA_HOME/bin
+```
+</CodeGroup>
+
+### yt-dlp Not Found
+
+If ViewTool can't find yt-dlp:
+
+1. Verify the path in **Edit → Preferences**
+2. Ensure the executable has permission to run:
+   ```bash
+   chmod +x /path/to/yt-dlp
+   ```
+3. On Windows, check that the path doesn't contain spaces or special characters
+
+### FFmpeg Not Found
+
+Audio extraction will fail without FFmpeg:
+
+1. Verify FFmpeg is in your PATH:
+   ```bash
+   which ffmpeg  # macOS/Linux
+   where ffmpeg  # Windows
+   ```
+2. If not found, repeat Step 3 and ensure you opened a new terminal after modifying PATH
+
+### Permission Errors
+
+If you get permission errors when downloading:
+
+1. Check that the output directory is writable
+2. Run ViewTool with appropriate permissions
+3. On Linux/macOS, avoid installing to system directories without sudo
+
+## Updating ViewTool
+
+To update ViewTool to a newer version:
+
+<Steps>
+  <Step title="Backup Configuration">
+    Your preferences are typically stored in:
+    - Windows: `%APPDATA%\ViewTool\`
+    - macOS: `~/Library/Application Support/ViewTool/`
+    - Linux: `~/.config/ViewTool/`
+  </Step>
+  
+  <Step title="Replace JAR File">
+    Download the new version and replace the old `ViewTool.jar` file.
+  </Step>
+  
+  <Step title="Restart Application">
+    Your settings should be preserved automatically.
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that ViewTool is installed, you're ready to download your first video!
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to download videos, extract audio, and manage your media library
+</Card>

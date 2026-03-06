@@ -1,80 +1,478 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Step-by-step guide to downloading your first video with ViewTool and exploring key features
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will help you download your first video with ViewTool in under 5 minutes. We'll cover the basic workflow and introduce you to the key features.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Make sure you've completed the [installation guide](/installation) before starting this tutorial.
 </Note>
+
+## Your First Download
+
+<Steps>
+  <Step title="Launch ViewTool">
+    Open a terminal in your ViewTool directory and run:
+    
+    ```bash
+    java -jar ViewTool.jar
+    ```
+    
+    The application window will appear with a loading panel. Wait a moment for initialization to complete.
+  </Step>
+  
+  <Step title="Log In (First Time Only)">
+    If this is your first time launching ViewTool, you'll see the login screen for DI Media Network integration.
+    
+    Enter your credentials or skip this step if you're only using local features.
+    
+    <Warning>
+      Network features (cloud sync, file sharing) require valid credentials. Contact your administrator if you need access.
+    </Warning>
+  </Step>
+  
+  <Step title="Locate the Main Panel">
+    After login, you'll see the main interface with two sections:
+    
+    - **Top section**: Download controls (Main Panel)
+    - **Bottom section**: Media library (Management Panel)
+    
+    The Main Panel contains:
+    - URL input field with YouTube icon
+    - Format selection (MP3 or MP4)
+    - "Only Audio" checkbox
+    - Download and Play buttons
+    - Progress bar
+  </Step>
+  
+  <Step title="Paste a YouTube URL">
+    Copy any YouTube video URL (e.g., `https://www.youtube.com/watch?v=dQw4w9WgXcQ`) and paste it into the URL field.
+    
+    The URL field is marked with a YouTube icon for easy identification.
+  </Step>
+  
+  <Step title="Choose Output Format">
+    Select your desired format using the radio buttons:
+    
+    - **MP3** (with audio icon): Downloads as audio file only
+    - **MP4** (with video icon): Downloads as video file
+    
+    The selected option will appear in bold.
+    
+    <Note>
+      If you select MP4 but check "Only Audio", ViewTool will extract the audio track and save it as M4A format.
+    </Note>
+  </Step>
+  
+  <Step title="Start the Download">
+    Click the **Download** button to start.
+    
+    You'll see:
+    1. A confirmation dialog: "The download is starting, please wait..."
+    2. The progress bar will activate and show percentage
+    3. The Download button will be disabled during the process
+    
+    ```java PanelMain.java
+    private void handleDownload() {
+        buttonDownload.setEnabled(false);
+        progressBar.setValue(0);
+
+        new SwingWorker<Integer, Integer>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                controller.validateUrl(textFieldURL.getText());
+                String limit = prefService.getLimitSpeed();
+                controller.validateSpeed(limit);
+
+                Alerts.info(PanelMain.this, "The download is starting, please wait...");
+
+                return controller.startDownload(
+                    textFieldURL.getText(),
+                    buttonMP3.isSelected() ? MediaFormat.MP3 : MediaFormat.MP4,
+                    checkBoxOnlyAudio.isSelected(),
+                    prefService.getOutputDir(),
+                    log,
+                    pct -> publish(pct),
+                    limit,
+                    preferences.isM3USelected()
+                );
+            }
+
+            @Override
+            protected void done() {
+                buttonDownload.setEnabled(true);
+                try {
+                    int exit = get();
+                    if (exit == 0) {
+                        Alerts.info(PanelMain.this, 
+                            "Download complete to " + prefService.getOutputDir().toString());
+                        progressBar.setValue(0);
+                    } else {
+                        utils.showFeedback(infoLabel,
+                            "Downloaded uncompleted. Try again.", true);
+                    }
+                } catch (Exception ex) {
+                    utils.showFeedback(infoLabel, "Invalid URL.", true);
+                }
+            }
+        }.execute();
+    }
+    ```
+  </Step>
+  
+  <Step title="Wait for Completion">
+    The progress bar will update in real-time showing the download percentage.
+    
+    When complete, you'll see: **"Download complete to [your output directory]"**
+    
+    The file is now saved to your configured output directory (default: Downloads folder).
+  </Step>
+</Steps>
+
+## Playing Your Downloaded File
+
+Once your download completes, you can immediately play it:
+
+<Steps>
+  <Step title="Click Play Last Video">
+    In the Main Panel, click the **Play last video** button.
+    
+    ViewTool will automatically find the most recently downloaded file in your output directory.
+  </Step>
+  
+  <Step title="File Opens in Default Player">
+    The file will open in your system's default media player:
+    - **MP4 files**: Video player (Windows Media Player, VLC, etc.)
+    - **MP3/M4A files**: Audio player (iTunes, Windows Media Player, etc.)
+    
+    You'll see a feedback message: "Opening..."
+  </Step>
+</Steps>
+
+Here's how the play functionality works under the hood:
+
+```java PanelMain.java
+private void handlePlayVideo() {
+    SwingWorker<Void, Void> openFileWorker = new SwingWorker<>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            playService.playLastDownloaded(prefService.getOutputDir());     
+            return null;
+        }
+
+        @Override
+        protected void done() {
+            try {
+                get();
+                utils.showFeedback(infoLabel,"Opening...", false);
+            } catch (InterruptedException | ExecutionException ex) {
+                utils.showFeedback(infoLabel,
+                    "You don't have videos yet.", true);
+            } 
+        }
+    };
+
+    openFileWorker.execute();
+}
+```
+
+## Exploring the Media Library
+
+The bottom section of the interface shows your media library:
+
+<Steps>
+  <Step title="View Downloaded Files">
+    The Media Management panel displays all files in your output directory as a table with columns:
+    
+    - **Name**: File name
+    - **Type**: MIME type (video/mp4, audio/mpeg, etc.)
+    - **Size**: File size in bytes
+    - **Date**: Last modified date
+    - **Location**: Local, Cloud, or Both
+  </Step>
+  
+  <Step title="Filter by File Type">
+    Use the filter dropdown to show only specific file types:
+    
+    - **All**: Shows everything
+    - **Video**: Only MP4, M4V, MOV files
+    - **Audio**: Only MP3, M4A, AAC files
+    - **Other**: Other file types
+  </Step>
+  
+  <Step title="Search for Files">
+    Type in the search box to filter files by name. Results update automatically as you type.
+    
+    <Note>
+      Search is case-insensitive and matches partial names.
+    </Note>
+  </Step>
+  
+  <Step title="Delete Unwanted Files">
+    To delete a file:
+    
+    1. Select the file in the table by clicking its row
+    2. Click the delete icon button
+    3. Confirm the deletion in the dialog
+    
+    <Warning>
+      Deletion is permanent and cannot be undone. Cloud files can only be deleted if you have proper permissions.
+    </Warning>
+  </Step>
+</Steps>
+
+## Advanced: Audio-Only Downloads
+
+To download just the audio track from a video:
+
+<Steps>
+  <Step title="Paste YouTube URL">
+    Enter the video URL as usual.
+  </Step>
+  
+  <Step title="Choose MP4 Format">
+    Select the **MP4** radio button (this tells ViewTool which quality to prioritize).
+  </Step>
+  
+  <Step title="Enable Only Audio">
+    Check the **Only Audio** checkbox. The label will appear in bold when selected.
+    
+    ```java PanelMain.java
+    private void checkBoxActionListener() {
+        checkBoxOnlyAudio.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (checkBoxOnlyAudio.isSelected()) {
+                    labelOnlyAudio.setFont(UIUtils.BOLD_FONT);
+                } else {
+                    labelOnlyAudio.setFont(UIUtils.PLAIN_FONT);
+                }
+            }
+        });
+    }
+    ```
+  </Step>
+  
+  <Step title="Download">
+    Click **Download**. ViewTool will extract the audio and save it as an M4A file.
+    
+    Behind the scenes, this passes the audio-only flag to yt-dlp:
+    
+    ```java YtDlpService.java
+    if (req.audioOnly() && req.format() == MediaFormat.MP4) {
+        commands.add("-x");
+        commands.add("--audio-format");
+        commands.add("m4a");
+    }
+    ```
+  </Step>
+</Steps>
+
+## Configuring Preferences
+
+Customize ViewTool's behavior through the Preferences panel:
+
+<Steps>
+  <Step title="Open Preferences">
+    Click **Edit → Preferences** in the menu bar, or click the settings icon in the top-right corner.
+  </Step>
+  
+  <Step title="Set yt-dlp Path">
+    Point to your yt-dlp executable:
+    
+    - Windows: `C:\Program Files\yt-dlp\yt-dlp.exe`
+    - macOS/Linux: `/usr/local/bin/yt-dlp`
+    
+    <Warning>
+      ViewTool cannot download videos without a valid yt-dlp path.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure Output Directory">
+    Choose where downloaded files are saved. Click the folder icon to browse.
+    
+    Default locations:
+    - Windows: `C:\Users\YourName\Downloads`
+    - macOS: `/Users/YourName/Downloads`
+    - Linux: `/home/yourname/Downloads`
+  </Step>
+  
+  <Step title="Set Speed Limit (Optional)">
+    Throttle download speed to avoid saturating your connection:
+    
+    - `1M` = 1 MB/s
+    - `500K` = 500 KB/s
+    - Leave empty for unlimited speed
+    
+    This gets passed to yt-dlp:
+    
+    ```java YtDlpService.java
+    if (req.limit() != null) {
+        commands.add("--limit-rate");
+        commands.add(req.limit());
+    }
+    ```
+  </Step>
+  
+  <Step title="Enable M3U Playlists (Optional)">
+    Check "Create .m3u file" to automatically generate playlist files for multi-video downloads.
+    
+    ViewTool will create `playlist.m3u` in your output directory:
+    
+    ```java YtDlpService.java
+    if (req.m3uFile()) {
+        commands.add("--print-to-file");
+        commands.add("after_move:%(filepath)s");
+        commands.add(req.outputDir().resolve("playlist.m3u").toString());
+    }
+    ```
+  </Step>
+  
+  <Step title="Save and Return">
+    Click the home icon in the top-right to return to the main interface. Your preferences are saved automatically.
+  </Step>
+</Steps>
+
+## Working with DI Media Network
+
+If you're logged into DI Media Network, you can sync files to the cloud:
+
+<Steps>
+  <Step title="View Network Files">
+    In the Media Management table, files show their location:
+    
+    - **Local**: Stored only on your computer
+    - **Cloud**: Stored only on the network
+    - **Both**: Synced to both locations
+    
+    Colors indicate status:
+    - Green: Available locally
+    - Blue: Cloud only
+    - White: Both
+  </Step>
+  
+  <Step title="Upload to Network">
+    To upload a local file:
+    
+    1. Select the file in the table
+    2. Click the upload icon
+    3. Enter the video URL if prompted
+    4. Wait for upload to complete
+    
+    <Note>
+      Only MP3, MP4, and M4A files can be uploaded to the network.
+    </Note>
+  </Step>
+  
+  <Step title="Download from Network">
+    To download a cloud file:
+    
+    1. Select a cloud-only file in the table
+    2. Click the download icon
+    3. The file will be saved to your output directory
+  </Step>
+  
+  <Step title="Automatic Sync">
+    ViewTool automatically polls the network for updates. When new files are added by other users, they'll appear in your table automatically.
+    
+    The MediaSyncPolling component handles this:
+    
+    ```java ViewToolApp.java
+    public class ViewToolApp extends javax.swing.JFrame {
+        private final String apiUrl = "https://dimedianetapi9.azurewebsites.net/";
+        
+        public ViewToolApp() {
+            mediaSyncPolling.setApiUrl(apiUrl);
+            // ... initialization
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting Common Issues
+
+### "Invalid URL" Error
+
+If you see this error:
+
+1. **Check the URL format**: Must be a complete URL starting with `http://` or `https://`
+2. **Verify it's a supported site**: yt-dlp supports many sites, but not all
+3. **Test the URL directly**:
+   ```bash
+   yt-dlp --simulate "your-url-here"
+   ```
+
+The validation happens in `ValidationService`:
+
+```java DownloadController.java
+public void validateUrl(String raw) {
+    ValidationService.requireValidUrl(raw); 
+}
+
+public int startDownload(String rawUrl, ...) throws Exception {
+    URI url = ValidationService.requireValidUrl(rawUrl);
+    // ... continue download
+}
+```
+
+### Download Stuck at 0%
+
+If the progress bar doesn't update:
+
+1. **Check your internet connection**
+2. **Verify yt-dlp path** in Preferences
+3. **Look for firewall blocks**: Some networks block video downloads
+4. **Try a different video**: The original might be unavailable
+
+### "You don't have videos yet" When Playing
+
+This means no media files were found:
+
+1. **Verify output directory** in Preferences
+2. **Check if download actually completed** (look for the success message)
+3. **Manually navigate** to the output directory to confirm files exist
+
+### Files Not Appearing in Library
+
+If downloaded files don't show up:
+
+1. **Refresh the view**: Change the filter dropdown and change it back
+2. **Check the output directory matches**: Edit → Preferences
+3. **Restart ViewTool**: Close and relaunch the application
+
+## Tips and Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Organize Downloads" icon="folder-tree">
+    Set different output directories for music vs. videos in Preferences to keep files organized.
+  </Card>
+  
+  <Card title="Use Speed Limits" icon="gauge">
+    Enable speed limiting when downloading during video calls or online gaming.
+  </Card>
+  
+  <Card title="Batch Downloads" icon="list">
+    Paste playlist URLs to download multiple videos at once. Enable M3U creation for easy playback.
+  </Card>
+  
+  <Card title="Regular Cleanup" icon="trash">
+    Use the Media Library to periodically delete old files and free up disk space.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Now that you're familiar with the basics:
+
+- **Experiment with different formats**: Try MP3 for music videos, MP4 for tutorials
+- **Explore network features**: Upload files to share with your team
+- **Customize settings**: Fine-tune speed limits and output paths
+- **Manage your library**: Use filters and search to organize large collections
+
+<Card title="Need Help?" icon="question">
+  Check the About section (Help → About) for author information and resources.
+</Card>

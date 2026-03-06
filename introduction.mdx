@@ -1,0 +1,238 @@
+---
+title: Introduction
+description: Learn about ViewTool, a Java Swing desktop application for downloading and managing YouTube content using yt-dlp
+---
+
+# Introduction to ViewTool
+
+ViewTool is a powerful desktop application built with **Java Swing** that enables users to download and manage multimedia content from the Internet using the **yt-dlp** command-line tool. Developed as part of the Interface Development module (DAM), ViewTool combines a retro aesthetic with modern functionality.
+
+<Note>
+  ViewTool requires **Java 17 or higher** and external dependencies like **yt-dlp** and **FFmpeg** to function properly.
+</Note>
+
+## Key Features
+
+ViewTool provides a comprehensive set of features for downloading and managing multimedia content:
+
+<CardGroup cols={2}>
+  <Card title="Video Downloads" icon="download">
+    Download YouTube videos directly via URL with support for MP3 and MP4 formats
+  </Card>
+  <Card title="Audio Extraction" icon="music">
+    Extract audio-only files from videos with high-quality MP3 or M4A output
+  </Card>
+  <Card title="Media Library" icon="folder">
+    Manage downloaded files with filtering, searching, and deletion capabilities
+  </Card>
+  <Card title="Network Sync" icon="cloud">
+    Integrate with DI Media Network to synchronize and share media files
+  </Card>
+</CardGroup>
+
+### Main Window Features
+
+- **URL-based downloads**: Paste any YouTube URL to start downloading
+- **Format selection**: Choose between MP3 (audio) or MP4 (video) output
+- **Audio-only mode**: Extract just the audio track from video content
+- **Progress tracking**: Real-time download progress bar with percentage display
+- **Quick playback**: Play the most recently downloaded file immediately
+- **Download logs**: View detailed yt-dlp execution logs after each download
+
+### Media Management
+
+The integrated media library manager provides:
+
+- **File visualization**: Browse downloaded files in a table view
+- **Smart filtering**: Filter files by type (video, audio, or other)
+- **Search functionality**: Find specific files by name instantly
+- **Batch operations**: Select and delete multiple files at once
+- **Cloud integration**: View local and network-stored files in a unified interface
+
+<Warning>
+  Files uploaded to the DI Media Network are limited to `.mp3`, `.mp4`, and `.m4a` formats only.
+</Warning>
+
+## Architecture Overview
+
+ViewTool follows a clean architecture pattern with separation of concerns:
+
+```
+ViewTool/
+ ├─ src/main/java/martin/viewtool/
+ │   ├─ core/          → Business logic and services
+ │   ├─ ui/            → Swing GUI components and controllers
+ │   ├─ utils/         → Utility classes and helpers
+ │   └─ config/        → Configuration management
+ ├─ resources/         → Images, icons, and assets
+ └─ yt-dlp.exe         → External download engine
+```
+
+### Core Components
+
+The application is built around several key service classes:
+
+#### YtDlpService
+
+Handles all interactions with the yt-dlp command-line tool:
+
+```java YtDlpService.java
+public class YtDlpService {
+    private final Path ytDplPath;
+
+    public YtDlpService(Path ytDlpPath) {
+        this.ytDplPath = ytDlpPath;
+    }
+
+    public int download(DownloadRequest req, Appendable out, 
+                       IntConsumer onPersent) throws IOException, InterruptedException {
+        List<String> commands = new ArrayList<>();
+        commands.add(ytDplPath.toString());
+        commands.add("-o");
+        commands.add("%(title)s.%(ext)s");
+        
+        switch (req.format()) {
+            case MP3 -> {
+                commands.add("-x");
+                commands.add("--audio-format");
+                commands.add("mp3");
+                commands.add("--audio-quality");
+                commands.add("0"); // best quality
+            }
+            case MP4 -> {
+                commands.add("-f");
+                commands.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4");
+            }
+        }
+        // ... more configuration
+    }
+}
+```
+
+#### MediaLibrary
+
+Manages local file scanning and operations:
+
+```java MediaLibrary.java
+public final class MediaLibrary {
+    public List<MediaItem> scan(Path dir) throws IOException {
+        if (!Files.isDirectory(dir)) 
+            return List.of();
+        try (Stream<Path> s = Files.list(dir)) {
+            return s.filter(Files::isRegularFile)
+                    .map(this::tosafeFile)
+                    .filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(MediaItem::getDate).reversed())
+                    .toList();
+        }
+    }
+
+    public boolean delete(MediaItem file) throws IOException {
+        return Files.deleteIfExists(file.getPath());
+    }
+}
+```
+
+#### DownloadController
+
+Coordinates the download process with validation:
+
+```java DownloadController.java
+public class DownloadController {
+    private final YtDlpService service;
+
+    public int startDownload(String rawUrl, MediaFormat format, 
+                           boolean onlyAudio, Path outputDir, 
+                           Appendable out, IntConsumer onPersent,
+                           String rawLimit, boolean m3uFile) throws Exception {
+        URI url = ValidationService.requireValidUrl(rawUrl);
+        String limit = ValidationService.requireValidLimit(rawLimit);
+        DownloadRequest req = new DownloadRequest(url, format, onlyAudio, 
+                                                   outputDir, limit, m3uFile);
+        return service.download(req, out, onPersent);
+    }
+}
+```
+
+### UI Architecture
+
+The user interface uses a **single JFrame** architecture with swappable panels:
+
+- **Login Panel**: Authentication for DI Media Network
+- **Main Panel**: Download controls and configuration
+- **Management Panel**: Media library table and operations
+- **Preferences Panel**: Application settings and paths
+
+All panels are dynamically loaded into the main `ViewToolApp` frame:
+
+```java ViewToolApp.java
+public class ViewToolApp extends javax.swing.JFrame {
+    private JPanel dinamicPanel;
+    
+    private void showPanel(JPanel panel) {
+        dinamicPanel.removeAll();
+        panel.setOpaque(true);
+        dinamicPanel.add(panel, BorderLayout.CENTER);
+        dinamicPanel.revalidate();
+        dinamicPanel.repaint();
+        pack();
+        setLocationRelativeTo(null);
+    }
+}
+```
+
+## Design Philosophy
+
+### Minimalist Aesthetic
+
+ViewTool uses a **black and white color palette** inspired by classic desktop applications, with occasional accent colors to draw attention to important actions. The Segoe UI font maintains consistency with Windows desktop standards.
+
+### User-Centric Design
+
+Every interface decision follows the **principle of least surprise**:
+
+- Components are grouped by function
+- Natural reading flow (top to bottom, left to right)
+- Visual feedback for all user actions
+- Disabled states prevent invalid operations
+- Tooltips explain icon-only buttons
+
+### Performance Optimizations
+
+- **Automatic loading**: List and table populate on startup without user intervention
+- **Table pagination**: Handles large media libraries efficiently
+- **Async operations**: All downloads and network calls run in background threads
+- **Smart polling**: MediaSyncPolling interval adjusts after initialization
+
+<Note>
+  The application includes a loading panel at startup to inform users that initialization is in progress.
+</Note>
+
+## Technology Stack
+
+- **Java 17**: Core language and runtime
+- **Swing**: GUI framework for cross-platform desktop UI
+- **yt-dlp**: Command-line tool for video downloading
+- **FFmpeg**: Media conversion and audio extraction
+- **MediaSyncPolling**: Custom component for DI Media Network integration
+
+## Use Cases
+
+ViewTool is ideal for:
+
+1. **Content Creators**: Download reference materials for video projects
+2. **Educators**: Save educational videos for offline viewing
+3. **Music Enthusiasts**: Extract audio tracks from music videos
+4. **Researchers**: Archive web content for academic purposes
+5. **Teams**: Share media files via the DI Media Network
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up Java, yt-dlp, and FFmpeg to run ViewTool
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Download your first video in under 5 minutes
+  </Card>
+</CardGroup>

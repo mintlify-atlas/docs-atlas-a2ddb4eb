@@ -1,0 +1,324 @@
+---
+title: "ViewToolApp"
+description: "Main application window (JFrame) that manages navigation, authentication, and panel switching in the ViewTool application"
+---
+
+## Overview
+
+The `ViewToolApp` class extends `javax.swing.JFrame` and serves as the main application window for ViewTool. It manages the overall layout, navigation between panels, user authentication state, and the media synchronization polling component.
+
+<Note>
+This is the entry point of the ViewTool Swing application. All panels are displayed within this frame's dynamic panel container.
+</Note>
+
+## Class Structure
+
+### Package
+```java
+package martin.viewtool.ui;
+```
+
+### Inheritance
+```java
+public class ViewToolApp extends javax.swing.JFrame
+```
+
+## Key Components
+
+### Fields
+
+<ParamField path="tokenService" type="TokenService">
+  Service for managing authentication tokens
+</ParamField>
+
+<ParamField path="token" type="String">
+  Current authentication token for the logged-in user
+</ParamField>
+
+<ParamField path="apiUrl" type="String" default="https://dimedianetapi9.azurewebsites.net/">
+  Base URL for the API server
+</ParamField>
+
+<ParamField path="loggedIn" type="boolean" default="false">
+  Tracks whether a user is currently authenticated
+</ParamField>
+
+<ParamField path="panelManagement" type="PanelManagement">
+  Panel for managing media library, downloads, and uploads
+</ParamField>
+
+<ParamField path="panelMain" type="PanelMain">
+  Main panel for downloading videos/audio from URLs
+</ParamField>
+
+<ParamField path="panelPreferences" type="PanelPreferences">
+  Settings and preferences panel
+</ParamField>
+
+<ParamField path="dinamicPanel" type="JPanel">
+  Container that displays the currently active panel
+</ParamField>
+
+<ParamField path="mediaSyncPolling" type="MediaSyncPolling">
+  Component that polls the server for media updates
+</ParamField>
+
+## Constructor
+
+### ViewToolApp()
+
+```java
+public ViewToolApp()
+```
+
+Initializes the main application frame. This constructor performs the following:
+
+1. Applies global UI styling via `applyGlobalUI()`
+2. Initializes Swing components
+3. Builds the layout structure
+4. Retrieves stored authentication token
+5. Initializes all panels (PanelMain, PanelManagement, PanelPreferences)
+6. Shows Login panel if no token exists, otherwise calls `loggedSuccess()`
+
+<CodeGroup>
+```java Example Usage
+ViewToolApp app = new ViewToolApp();
+app.setVisible(true);
+```
+</CodeGroup>
+
+## Key Methods
+
+### applyGlobalUI()
+
+<ParamField path="applyGlobalUI" type="static void">
+  Configures global Swing UI defaults for consistent styling across the application
+</ParamField>
+
+```java
+private static void applyGlobalUI()
+```
+
+Sets application-wide UI properties:
+- Background color: White
+- Font: Segoe UI, 14pt
+- Button, ComboBox, CheckBox, and other component styling
+
+<CodeGroup>
+```java Settings Applied
+UIManager.put("Panel.background", Color.WHITE);
+UIManager.put("Label.font", new Font("Segoe UI", Font.PLAIN, 14));
+UIManager.put("Button.background", Color.lightGray);
+UIManager.put("Button.foreground", Color.BLACK);
+```
+</CodeGroup>
+
+### buildLayout()
+
+```java
+private void buildLayout()
+```
+
+Constructs the main window layout using BorderLayout:
+- **NORTH**: Navigation buttons (Home and Settings)
+- **CENTER**: Dynamic panel container for switching between views
+
+### loggedSuccess()
+
+<ParamField path="loggedSuccess" type="void">
+  Called after successful authentication to display the main application interface
+</ParamField>
+
+```java
+public final void loggedSuccess(String token)
+```
+
+**Parameters:**
+- `token` (String): Authentication token for the logged-in user
+
+**Actions:**
+1. Stores the authentication token
+2. Sets `loggedIn` to true
+3. Displays PanelMain and PanelManagement in split view
+4. Makes Settings button visible
+
+<CodeGroup>
+```java Example
+String authToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+app.loggedSuccess(authToken);
+```
+</CodeGroup>
+
+### showPanel()
+
+```java
+private void showPanel(JPanel panel)
+```
+
+**Parameters:**
+- `panel` (JPanel): The panel to display in the dynamic container
+
+Replaces the current panel with the specified panel. This method:
+- Clears the dynamic panel container
+- Adds the new panel to CENTER position
+- Toggles navigation button visibility based on login state
+- Revalidates and repaints the UI
+- Centers the window on screen
+
+<Note>
+This method is used for single-panel views like Login or Preferences.
+</Note>
+
+### showMainAndManagement()
+
+```java
+public void showMainAndManagement(JPanel top, JPanel bottom)
+```
+
+**Parameters:**
+- `top` (JPanel): Panel to display at the top (typically PanelMain)
+- `bottom` (JPanel): Panel to display at the bottom (typically PanelManagement)
+
+Creates a combined view with two panels stacked vertically:
+- Top panel has fixed height of 167 pixels
+- Bottom panel fills remaining space
+- Hides Home button, shows Settings button
+
+<CodeGroup>
+```java Usage in Constructor
+showMainAndManagement(panelMain, panelManagement);
+```
+</CodeGroup>
+
+## Event Handlers
+
+### buttonMainActionPerformed()
+
+```java
+private void buttonMainActionPerformed(ActionEvent evt)
+```
+
+Navigates back to the main view (PanelMain + PanelManagement) when Home button is clicked.
+
+### buttonSettingActionPerformed()
+
+```java
+private void buttonSettingActionPerformed(ActionEvent evt)
+```
+
+Displays the Preferences panel when Settings button is clicked.
+
+### MenuLogoutItemActionPerformed()
+
+```java
+private void MenuLogoutItemActionPerformed(ActionEvent evt)
+```
+
+Handles user logout:
+1. Shows Login panel
+2. Sets `loggedIn` to false
+3. Deletes stored token
+4. Stops media polling
+5. Hides navigation buttons
+
+<CodeGroup>
+```java Logout Flow
+if (isLoggedIn()) {
+    showPanel(new Login(this));
+    setLoggedIn(false);
+    tokenService.deleteToken();
+    mediaSyncPolling.setRunning(false);
+    panelButtonMainAndSetting.setVisible(false);
+}
+```
+</CodeGroup>
+
+### MenuItemPreferencesActionPerformed()
+
+```java
+private void MenuItemPreferencesActionPerformed(ActionEvent evt)
+```
+
+Displays the Preferences panel from the menu bar (only if logged in).
+
+### MenuItemExitActionPerformed()
+
+```java
+private void MenuItemExitActionPerformed(ActionEvent evt)
+```
+
+Exits the application with `System.exit(0)`.
+
+### MenuItemAboutActionPerformed()
+
+```java
+private void MenuItemAboutActionPerformed(ActionEvent evt)
+```
+
+Shows the About dialog with application information:
+- Author: César Martín Pérez
+- Subject: DI - DAM 2025/2026
+- Date: 27/10/2025
+- Resources: yt-dlp, ffmpeg/ffprobe
+
+## Public Getters
+
+<ParamField path="getComponent" type="MediaSyncPolling">
+  Returns the MediaSyncPolling component instance
+</ParamField>
+
+<ParamField path="getTokenService" type="TokenService">
+  Returns the TokenService instance for token management
+</ParamField>
+
+<ParamField path="getApiUrl" type="String">
+  Returns the API base URL
+</ParamField>
+
+<ParamField path="isLoggedIn" type="boolean">
+  Returns the current login state
+</ParamField>
+
+<ParamField path="setLoggedIn" type="void">
+  Sets the login state (parameter: boolean loggedIn)
+</ParamField>
+
+## Menu Structure
+
+### File Menu
+- **Logout**: Logs out the current user
+- **Exit**: Closes the application
+
+### Edit Menu
+- **Preferences**: Opens the preferences panel
+
+### Help Menu
+- **About**: Displays application information
+
+## UI Components
+
+### Navigation Buttons
+
+<ParamField path="buttonMain" type="JButton">
+  Home button with home icon - navigates to main view
+</ParamField>
+
+<ParamField path="buttonSetting" type="JButton">
+  Settings button with gear icon - opens preferences
+</ParamField>
+
+### Dialogs
+
+<ParamField path="dialogAbout" type="JDialog">
+  Modal dialog displaying application information (300x300)
+</ParamField>
+
+## Related Classes
+
+- `PanelMain`: Download interface
+- `PanelManagement`: Media library management
+- `PanelPreferences`: Application settings
+- `Login`: Authentication panel
+- `TokenService`: Token storage and retrieval
+- `MediaSyncPolling`: Server polling for media updates
+- `UIUtils`: UI utility methods for icons and styling
