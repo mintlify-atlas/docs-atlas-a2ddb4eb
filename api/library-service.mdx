@@ -1,0 +1,219 @@
+---
+title: "LibraryService"
+description: "Media library scanning and filtering service"
+---
+
+## Overview
+
+The `LibraryService` class provides high-level operations for managing the local media library. It wraps the `MediaLibrary` class and adds filtering capabilities for organizing media by type (videos, audios, or all).
+
+**Source:** `src/main/java/martin/viewtool/core/LibraryService.java:16`
+
+## Class Definition
+
+```java LibraryService.java
+public final class LibraryService {
+    private final MediaLibrary mediaLibrary = new MediaLibrary();
+    private final Path downloadDir;
+
+    public LibraryService(Path downloadDir) {
+        this.downloadDir = downloadDir;
+    }
+}
+```
+
+## Constructor
+
+### LibraryService(Path downloadDir)
+
+Creates a new library service for the specified download directory.
+
+<ParamField path="downloadDir" type="Path" required>
+  The directory containing downloaded media files
+</ParamField>
+
+```java Example usage
+Path downloadDir = Path.of("C:/Users/user/Downloads/ViewTool");
+LibraryService libraryService = new LibraryService(downloadDir);
+```
+
+## Methods
+
+### getFiles()
+
+Retrieves all media files from the download directory without filtering.
+
+**Returns:** `List<MediaItem>` - All media files in the directory
+
+**Throws:** `IOException` - If directory cannot be read
+
+**Behavior:**
+- Scans the download directory
+- Returns all valid media files
+- Files are sorted by date (newest first)
+- Invalid files are excluded (see [MediaLibrary](/api/media-library))
+
+```java Example usage
+List<MediaItem> allFiles = libraryService.getFiles();
+
+for (MediaItem item : allFiles) {
+    System.out.println(item.getName() + " (" + item.getMimeType() + ")");
+}
+```
+
+**Implementation:**
+
+```java LibraryService.java:24
+public List<MediaItem> getFiles() throws IOException {
+    List<MediaItem> allItems = mediaLibrary.scan(downloadDir);
+    return allItems;
+}
+```
+
+### getFilteredFiles()
+
+Retrieves media files filtered by type (videos, audios, or all).
+
+<ParamField path="filter" type="String" required>
+  Filter type: "All", "Videos", or "Audios"
+</ParamField>
+
+**Returns:** `List<MediaItem>` - Filtered list of media files
+
+**Throws:** `IOException` - If directory cannot be read
+
+**Filter Options:**
+
+| Filter Value | Description | MIME Types Included |
+|-------------|-------------|--------------------|
+| `"All"` | All media files | `video/*` and `audio/*` |
+| `"Videos"` | Video files only | `video/*` |
+| `"Audios"` | Audio files only | `audio/*` |
+| Other | All files (no filter) | Everything |
+
+```java Example usage
+// Get only video files
+List<MediaItem> videos = libraryService.getFilteredFiles("Videos");
+
+// Get only audio files
+List<MediaItem> audios = libraryService.getFilteredFiles("Audios");
+
+// Get all media (videos + audios)
+List<MediaItem> allMedia = libraryService.getFilteredFiles("All");
+```
+
+## Implementation Details
+
+The filtering logic uses Java Streams and pattern matching:
+
+```java LibraryService.java:31
+public List<MediaItem> getFilteredFiles(String filter) throws IOException {
+    List<MediaItem> allItems = mediaLibrary.scan(downloadDir);
+
+    return allItems.stream()
+            .filter(item -> switch (filter) {
+                case "All" -> item.getMimeType().startsWith("video/") || item.getMimeType().startsWith("audio/");
+                case "Videos" -> item.getMimeType().startsWith("video/");
+                case "Audios" -> item.getMimeType().startsWith("audio/");
+                default -> true;
+            })
+            .collect(Collectors.toList());
+}
+```
+
+## MIME Type Detection
+
+The service filters based on MIME types detected by `MediaLibrary`:
+
+**Video MIME Types:**
+- `video/mp4` - MP4 video files
+- `video/webm` - WebM video files
+
+**Audio MIME Types:**
+- `audio/mpeg` - MP3 audio files
+- `audio/mp4` - M4A audio files
+- `audio/wav` - WAV audio files
+
+<Note>
+  MIME type detection is done by `Files.probeContentType()` with fallback to extension-based detection in MediaLibrary.
+</Note>
+
+## Usage in UI Components
+
+The service is primarily used by `ManagementService` to populate UI lists:
+
+```java ManagementService.java:30
+public DefaultListModel<String> getUpdatedLocalListModel(String filterType) throws IOException {
+    List<MediaItem> files = libraryService.getFilteredFiles(filterType);
+
+    DefaultListModel<String> model = new DefaultListModel<>();
+    for (MediaItem file : files) {
+        model.addElement(file.getName());
+    }
+    return model;
+}
+```
+
+## Complete Example
+
+Showing filtered files in a JList:
+
+```java Complete filtering workflow
+Path downloadDir = prefService.getOutputDir();
+LibraryService libraryService = new LibraryService(downloadDir);
+
+// Create filter combo box
+JComboBox<String> filterCombo = new JComboBox<>(new String[]{"All", "Videos", "Audios"});
+
+// Create file list
+DefaultListModel<String> listModel = new DefaultListModel<>();
+JList<String> fileList = new JList<>(listModel);
+
+// Update list when filter changes
+filterCombo.addActionListener(e -> {
+    try {
+        String filter = (String) filterCombo.getSelectedItem();
+        List<MediaItem> files = libraryService.getFilteredFiles(filter);
+        
+        listModel.clear();
+        for (MediaItem item : files) {
+            listModel.addElement(item.getName());
+        }
+    } catch (IOException ex) {
+        Alerts.error(this, "Failed to load files: " + ex.getMessage());
+    }
+});
+```
+
+## Performance Considerations
+
+<Warning>
+  Each call to `getFilteredFiles()` performs a full directory scan. For frequently updated lists, consider caching the results or using a file system watcher to detect changes.
+</Warning>
+
+```java Optimization example
+private List<MediaItem> cachedFiles;
+private long lastScanTime;
+
+public List<MediaItem> getFilteredFiles(String filter) throws IOException {
+    long now = System.currentTimeMillis();
+    
+    // Refresh cache every 5 seconds
+    if (cachedFiles == null || now - lastScanTime > 5000) {
+        cachedFiles = libraryService.getFiles();
+        lastScanTime = now;
+    }
+    
+    // Filter cached results
+    return cachedFiles.stream()
+        .filter(item -> matchesFilter(item, filter))
+        .collect(Collectors.toList());
+}
+```
+
+## Related Classes
+
+- [MediaLibrary](/api/media-library) - Low-level directory scanning
+- [MediaItem](/api/media-library#mediaitem) - Represents a single media file
+- ManagementService - Orchestrates library operations (internal)
+- [PanelManagement](/api/panel-management) - UI for browsing library

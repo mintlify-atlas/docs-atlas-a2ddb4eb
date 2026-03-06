@@ -51,7 +51,7 @@
         "groups": [
           {
             "group": "Core Services",
-            "pages": ["api/yt-dlp-service", "api/media-library", "api/download-controller", "api/media-service"]
+            "pages": ["api/yt-dlp-service", "api/media-library", "api/library-service", "api/download-controller", "api/media-service", "api/play-service", "api/token-service"]
           },
           {
             "group": "UI Components",

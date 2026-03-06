@@ -1,0 +1,187 @@
+---
+title: "PlayService"
+description: "Service for opening the most recently downloaded media file"
+---
+
+## Overview
+
+The `PlayService` class provides functionality to find and open the most recently downloaded media file using the system's default application. It's used by the "Play Last Video" feature in the main panel.
+
+**Source:** `src/main/java/martin/viewtool/core/PlayService.java:19`
+
+## Class Definition
+
+```java PlayService.java
+package martin.viewtool.core;
+
+import java.awt.Desktop;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.Optional;
+import java.util.stream.Stream;
+
+public class PlayService {
+    public void playLastDownloaded(Path downloadDir) throws IOException { }
+}
+```
+
+## Method
+
+### playLastDownloaded()
+
+Finds and opens the most recently downloaded media file in the specified directory.
+
+<ParamField path="downloadDir" type="Path" required>
+  The directory to scan for media files
+</ParamField>
+
+**Returns:** `void` - Opens the file with the system default application
+
+**Throws:**
+- `IOException` - If the directory doesn't exist or no media files are found
+
+**Behavior:**
+- Validates that the download directory exists
+- Scans for regular files with extensions: `.mp4`, `.mp3`, `.m4a`
+- Sorts files by last modified timestamp (newest first)
+- Opens the newest file using `Desktop.getDesktop().open()`
+- Throws exception if no valid media files are found
+
+## Supported File Formats
+
+The service only considers files with these extensions:
+- **MP4** - Video files
+- **MP3** - Audio files (converted from video)
+- **M4A** - Audio files (audio-only downloads)
+
+## Implementation Details
+
+```java PlayService.java:21 lines
+public void playLastDownloaded(Path downloadDir) throws IOException {
+    if (!Files.isDirectory(downloadDir)) {
+        throw new IOException("The download directory does not exist: " + downloadDir);
+    }
+
+    try (Stream<Path> files = Files.list(downloadDir)) {
+        Optional<Path> newest = files
+                .filter(Files::isRegularFile)
+                .filter(p -> {
+                    String name = p.getFileName().toString().toLowerCase();
+                    return name.endsWith(".mp4") || name.endsWith(".mp3") || name.endsWith(".m4a");
+                })
+                .max(Comparator.comparingLong(p -> p.toFile().lastModified()));
+
+        if (newest.isPresent()) {
+            Path file = newest.get();
+            System.out.println("Opening..." + file);
+            Desktop.getDesktop().open(file.toFile());
+        } else {
+            throw new IOException("No videos or audios were found in " + downloadDir);
+        }
+    }
+}
+```
+
+## Usage Example
+
+From the main panel's "Play Last Video" button:
+
+```java PanelMain.java:241 (simplified)
+private void handlePlayVideo() {
+    new SwingWorker<Void, Void>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            Path outputDir = prefService.getOutputDir();
+            playService.playLastDownloaded(outputDir);
+            return null;
+        }
+        
+        @Override
+        protected void done() {
+            try {
+                get();
+                // Success
+            } catch (Exception ex) {
+                Alerts.showException(PanelMain.this, ex);
+            }
+        }
+    }.execute();
+}
+```
+
+## Desktop Integration
+
+The service uses Java's `Desktop` API to open files with the system's default application:
+
+<CodeGroup>
+
+```java Windows
+// Opens with Windows Media Player or associated app
+Desktop.getDesktop().open(file.toFile());
+```
+
+```java macOS
+// Opens with QuickTime Player or associated app
+Desktop.getDesktop().open(file.toFile());
+```
+
+```java Linux
+// Opens with xdg-open default application
+Desktop.getDesktop().open(file.toFile());
+```
+
+</CodeGroup>
+
+## Error Handling
+
+The method throws `IOException` in the following cases:
+
+1. **Directory doesn't exist:**
+   ```
+   The download directory does not exist: /path/to/dir
+   ```
+
+2. **No media files found:**
+   ```
+   No videos or audios were found in /path/to/dir
+   ```
+
+<Note>
+  The service will ignore files that don't match the supported extensions, even if they are media files with different formats (e.g., .avi, .mkv, .wav).
+</Note>
+
+## File Selection Logic
+
+When multiple media files exist, the service selects based on:
+1. **Most recent first** - Files are sorted by `lastModified` timestamp
+2. **Extension filtering** - Only `.mp4`, `.mp3`, `.m4a` files are considered
+3. **Case-insensitive** - Extension matching works regardless of case
+
+```java Example scenario
+// Directory contents:
+// video1.mp4 (modified 2 hours ago)
+// audio1.mp3 (modified 1 hour ago)  ← This will be opened
+// document.pdf (modified 30 min ago) ← Ignored (not media)
+
+playService.playLastDownloaded(downloadDir);
+// Opens: audio1.mp3
+```
+
+## Performance Considerations
+
+- Uses Java Streams for efficient file filtering
+- `try-with-resources` ensures proper stream closure
+- Single directory scan (not recursive)
+- Sorts only filtered files (not all directory contents)
+
+<Tip>
+  For large download directories with thousands of files, consider indexing recently downloaded files to avoid scanning the entire directory on each play request.
+</Tip>
+
+## Related Classes
+
+- [PanelMain](/api/panel-main) - Contains "Play Last Video" button
+- [PreferencesService](/api/preferences-service) - Provides download directory path
+- [YtDlpService](/api/yt-dlp-service) - Downloads the media files

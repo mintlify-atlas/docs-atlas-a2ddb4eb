@@ -1,0 +1,206 @@
+---
+title: "TokenService"
+description: "Token persistence and authentication state management"
+---
+
+## Overview
+
+The `TokenService` class manages authentication tokens for the DI Media Network integration. It handles token persistence to disk, retrieval, and deletion for maintaining user sessions across application restarts.
+
+**Source:** `src/main/java/martin/viewtool/core/TokenService.java:17`
+
+## Class Definition
+
+```java TokenService.java
+public class TokenService {
+    private final Path TOKEN_PATH = Path.of("datos/token_txt.txt");
+    private String token;
+    
+    public TokenService() {}
+}
+```
+
+## Methods
+
+### saveToken()
+
+Persists an authentication token to disk for future sessions.
+
+<ParamField path="token" type="String" required>
+  The authentication token to save
+</ParamField>
+
+**Behavior:**
+- Creates the `datos/` directory if it doesn't exist
+- Writes the token to `datos/token_txt.txt`
+- Overwrites any existing token file
+- Silent error handling (prints to console on failure)
+
+```java Example usage
+TokenService tokenService = new TokenService();
+tokenService.saveToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...");
+```
+
+**Implementation details:**
+
+The method uses `BufferedWriter` for file I/O and creates parent directories automatically:
+
+```java TokenService.java:25
+public void saveToken(String token) {
+    try {
+        if (!Files.exists(TOKEN_PATH.getParent())) {
+            Files.createDirectories(TOKEN_PATH.getParent());
+        }
+    } catch (IOException ex) {
+        System.out.println(ex.getMessage());
+    }
+
+    BufferedWriter out;
+    try {
+        out = new BufferedWriter(new FileWriter(TOKEN_PATH.toFile()));
+        out.write(token);
+        out.close();
+    } catch (IOException ex) {
+        System.out.print(ex.getMessage());
+    }
+}
+```
+
+### getToken()
+
+Retrieves the stored authentication token.
+
+**Returns:** `String` - The stored token, or `null` if no token exists
+
+**Behavior:**
+- Returns cached token if already loaded in memory
+- Reads from `datos/token_txt.txt` if file exists
+- Trims whitespace from the token
+- Returns `null` if no token file exists
+- Caches the token in memory after first read
+
+```java Example usage
+TokenService tokenService = new TokenService();
+String token = tokenService.getToken();
+
+if (token != null) {
+    // User is authenticated
+    mediaSyncPolling.setToken(token);
+} else {
+    // Show login screen
+    showLoginDialog();
+}
+```
+
+**Implementation:**
+
+```java TokenService.java:63
+public String getToken() {
+    if(token != null) {
+        return token;
+    }
+    if (Files.exists(TOKEN_PATH)) {
+        try {
+            token = Files.readString(TOKEN_PATH).trim();
+        } catch (IOException ex) {
+            System.out.print(ex.getMessage());
+        }
+        return token;
+    } else {
+        return null;
+    }
+}
+```
+
+### setToken()
+
+Sets the token in memory without persisting to disk.
+
+<ParamField path="token" type="String" required>
+  The authentication token to cache in memory
+</ParamField>
+
+**Use case:** Setting the token after successful login, before calling `saveToken()`.
+
+```java Example usage
+String newToken = loginService.authenticate(email, password);
+tokenService.setToken(newToken);  // Cache in memory
+tokenService.saveToken(newToken); // Persist to disk
+```
+
+### deleteToken()
+
+Deletes the stored token file, effectively logging out the user.
+
+**Returns:** `boolean` - `true` if the file was deleted, `false` otherwise
+
+**Behavior:**
+- Checks if token file exists before attempting deletion
+- Returns `false` if file doesn't exist
+- Returns `true` on successful deletion
+- Silent error handling on exceptions
+
+```java Example usage from ViewToolApp.java:357
+if (isLoggedIn()) {
+    showPanel(new Login(this));
+    setLoggedIn(false);
+    tokenService.deleteToken();  // Clear stored token
+    mediaSyncPolling.setRunning(false);
+    panelButtonMainAndSetting.setVisible(false);
+}
+```
+
+**Implementation:**
+
+```java TokenService.java:47
+public boolean deleteToken() {
+    try {
+        if (Files.exists(TOKEN_PATH)) {
+            Files.delete(TOKEN_PATH);
+            return true;
+        } else {
+            return false;
+        }
+    } catch (Exception ex) {
+        System.out.print(ex.getMessage());
+    }
+    return false;
+}
+```
+
+## Usage in Application
+
+The `TokenService` is used throughout ViewToolApp for authentication state management:
+
+```java ViewToolApp.java:22
+private final TokenService tokenService = new TokenService();
+private String token;
+
+public ViewToolApp() {
+    // ... initialization ...
+    token = tokenService.getToken();
+    
+    if (token == null) {
+        Login login = new Login(this);
+        showPanel(login);
+    } else {
+        loggedSuccess(token);
+    }
+}
+```
+
+## Security Considerations
+
+<Warning>
+  The token is stored in plain text in `datos/token_txt.txt`. This is suitable for educational projects but production applications should encrypt tokens or use OS-level secure storage (e.g., Windows Credential Manager, macOS Keychain).
+</Warning>
+
+<Note>
+  The token file is created in the application's working directory under `datos/`. Ensure this directory is excluded from version control (.gitignore).
+</Note>
+
+## Related Classes
+
+- [ViewToolApp](/api/view-tool-app) - Uses TokenService for authentication flow
+- [Login](/ui/login) - Saves tokens after successful authentication
+- [MediaService](/api/media-service) - Uses tokens for API requests
